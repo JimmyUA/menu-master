@@ -1,0 +1,13 @@
+# Core Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Google Cloud
+google-cloud-aiplatform>=1.38.0
+google-cloud-firestore>=2.14.0
+
+# Data Validation
+pydantic>=2.5.0
+
+# Utilities
+python-dotenv>=1.0.0
