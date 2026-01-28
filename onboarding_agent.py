@@ -355,7 +355,7 @@ class OnboardingConversationHandler:
         try:
             vertexai.init(project=project_id, location=location)
             self.model = GenerativeModel(
-                "gemini-1.5-flash",
+                "gemini-1.5-flash-001",
                 system_instruction=SYSTEM_INSTRUCTION,
             )
             logger.info("Vertex AI initialized successfully")
