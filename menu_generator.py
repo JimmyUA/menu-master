@@ -34,13 +34,39 @@ logger = logging.getLogger(__name__)
 # Pydantic Models for Menu
 # =============================================================================
 
+# =============================================================================
+# Pydantic Models for Menu (Strict for Generation)
+# =============================================================================
+
 class MenuSlot(BaseModel):
     """Details for a specific meal."""
-    name: str = Field(..., description="Name of the dish")
+    name: str = Field(..., description="Name of the dish or 'SKIPPED'")
     description: str = Field(..., description="Brief description of the dish")
     ingredients: list[str] = Field(..., description="List of main ingredients")
     preparation_steps: list[str] = Field(..., description="Step-by-step preparation instructions")
 
+
+class StrictDailyMenu(BaseModel):
+    """Menu for a specific day (Strict for generation)."""
+    breakfast: MenuSlot
+    lunch: MenuSlot
+    dinner: MenuSlot
+
+
+class StrictWeeklyMenu(BaseModel):
+    """Weekly meal plan (Strict for generation)."""
+    monday: StrictDailyMenu
+    tuesday: StrictDailyMenu
+    wednesday: StrictDailyMenu
+    thursday: StrictDailyMenu
+    friday: StrictDailyMenu
+    saturday: StrictDailyMenu
+    sunday: StrictDailyMenu
+
+
+# =============================================================================
+# Pydantic Models for Persistence (With Optionals)
+# =============================================================================
 
 class DailyMenu(BaseModel):
     """Menu for a specific day."""
@@ -95,23 +121,16 @@ Cooking Schedule (Only generate meals for these slots):
 
 Instructions:
 1. Create a diverse and balanced menu for the week based strictly on the user's schedule.
-2. If a meal slot (e.g., Monday Lunch) is NOT marked as "Cook at home", do NOT generate a menu for it (leave it null/empty).
-3. Ensure recipes respect all dietary preferences and allergies.
-4. For each meal, provide:
-    - Name of the dish
-    - Brief description
-    - List of ingredients
-    - Step-by-step preparation instructions
+2. IMPORTANT: You must return a strict JSON object where EVERY meal slot (breakfast, lunch, dinner) is present.
+3. If a meal slot is NOT marked as "Cook at home" in the schedule:
+    - Set "name" to "SKIPPED"
+    - Set "description" to "Skipped"
+    - Set "ingredients" to []
+    - Set "preparation_steps" to []
+4. For valid meals, provide full details including step-by-step preparation instructions.
 5. Use local ingredients available in {city}, {country} where possible.
 
-Return the result as a JSON object adhering to this schema:
-{{
-    "monday": {{ "breakfast": {{...}}, "lunch": {{...}}, "dinner": {{...}} }},
-    "tuesday": {{...}},
-    ...
-    "sunday": {{...}}
-}}
-If a slot is skipped, set it to null.
+Return the result as a JSON object adhering to the schema provided.
 """
 
 
@@ -187,18 +206,40 @@ class MenuGenerator:
                     temperature=0.7,
                     max_output_tokens=8192,
                     response_mime_type="application/json",
-                    response_schema=WeeklyMenu.model_json_schema(),
+                    response_schema=StrictWeeklyMenu.model_json_schema(),
                 ),
             )
             
-            # Parse and validate response
+            # Parse response into Strict models
             menu_data = json.loads(response.text)
-            weekly_menu = WeeklyMenu(**menu_data)
-            return weekly_menu
+            strict_menu = StrictWeeklyMenu(**menu_data)
+            
+            # Convert to nullable WeeklyMenu
+            return self._convert_strict_to_weekly_menu(strict_menu)
 
         except Exception as e:
             logger.error(f"Error generating menu for user {user_profile.user_id}: {e}")
             return None
+
+    def _convert_strict_to_weekly_menu(self, strict_menu: StrictWeeklyMenu) -> WeeklyMenu:
+        """Convert StrictWeeklyMenu (with SKIPPED) to WeeklyMenu (with None)."""
+        
+        def convert_daily(strict_daily: StrictDailyMenu) -> DailyMenu:
+            return DailyMenu(
+                breakfast=strict_daily.breakfast if strict_daily.breakfast.name != "SKIPPED" else None,
+                lunch=strict_daily.lunch if strict_daily.lunch.name != "SKIPPED" else None,
+                dinner=strict_daily.dinner if strict_daily.dinner.name != "SKIPPED" else None,
+            )
+
+        return WeeklyMenu(
+            monday=convert_daily(strict_menu.monday),
+            tuesday=convert_daily(strict_menu.tuesday),
+            wednesday=convert_daily(strict_menu.wednesday),
+            thursday=convert_daily(strict_menu.thursday),
+            friday=convert_daily(strict_menu.friday),
+            saturday=convert_daily(strict_menu.saturday),
+            sunday=convert_daily(strict_menu.sunday),
+        )
 
     def _format_schedule_description(self, schedule: WeeklySchedule) -> str:
         """Helper to create a readable description of the cooking schedule."""
