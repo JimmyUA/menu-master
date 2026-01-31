@@ -148,7 +148,7 @@ class MenuGenerator:
         # Initialize Vertex AI
         try:
             vertexai.init(project=project_id, location=location)
-            self.model = GenerativeModel("gemini-1.5-flash-001")
+            self.model = GenerativeModel("gemini-2.0-flash-001")
             logger.info("Vertex AI initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Vertex AI: {e}")
