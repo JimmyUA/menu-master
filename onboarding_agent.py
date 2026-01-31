@@ -46,6 +46,24 @@ class HouseholdInfo(BaseModel):
     children: int = Field(default=0, ge=0)
 
 
+class DailyMeals(BaseModel):
+    """Meals to plan for a specific day."""
+    breakfast: bool = Field(default=False, description="Cook at home")
+    lunch: bool = Field(default=False, description="Cook at home")
+    dinner: bool = Field(default=True, description="Cook at home")
+
+
+class WeeklySchedule(BaseModel):
+    """Weekly meal plan schedule."""
+    monday: DailyMeals = Field(default_factory=DailyMeals)
+    tuesday: DailyMeals = Field(default_factory=DailyMeals)
+    wednesday: DailyMeals = Field(default_factory=DailyMeals)
+    thursday: DailyMeals = Field(default_factory=DailyMeals)
+    friday: DailyMeals = Field(default_factory=DailyMeals)
+    saturday: DailyMeals = Field(default_factory=DailyMeals)
+    sunday: DailyMeals = Field(default_factory=DailyMeals)
+
+
 class UserProfile(BaseModel):
     """Complete user profile for meal planning."""
     user_id: str
@@ -53,7 +71,7 @@ class UserProfile(BaseModel):
     household: HouseholdInfo
     dietary_preferences: list[str] = Field(default_factory=list)
     allergies_dislikes: list[str] = Field(default_factory=list)
-    cooking_frequency_per_week: int = Field(default=3, ge=0, le=21)
+    meal_schedule: WeeklySchedule = Field(default_factory=WeeklySchedule)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_firestore_dict(self) -> dict:
@@ -70,7 +88,7 @@ class UserProfile(BaseModel):
             },
             "dietary_preferences": self.dietary_preferences,
             "allergies_dislikes": self.allergies_dislikes,
-            "cooking_frequency_per_week": self.cooking_frequency_per_week,
+            "meal_schedule": self.meal_schedule.model_dump(),
             "created_at": self.created_at,
         }
 
@@ -127,7 +145,7 @@ Your goal is to naturally collect the following information through conversation
 1. Household size (how many adults and children)
 2. Dietary constraints (allergies, vegetarian, vegan, keto, etc.)
 3. Specific dislikes (ingredients they want to avoid)
-4. Cooking frequency (how many times per week they cook at home)
+4. Cooking Routine (which specific days and meals they cook at home, e.g., "dinners on weekdays", "only weekends", etc.)
 
 Guidelines:
 - Ask ONE question at a time, keeping it casual and conversational
@@ -162,8 +180,17 @@ Required JSON schema:
     },
     "dietary_preferences": [<list of dietary preferences like "vegetarian", "keto", "Mediterranean", etc.>],
     "allergies_dislikes": [<list of allergies and ingredient dislikes>],
-    "cooking_frequency_per_week": <integer 0-21, default 3 if not specified>
+    "meal_schedule": {
+        "monday": {"breakfast": <bool>, "lunch": <bool>, "dinner": <bool>},
+        "tuesday": {"breakfast": <bool>, "lunch": <bool>, "dinner": <bool>},
+        "wednesday": {"breakfast": <bool>, "lunch": <bool>, "dinner": <bool>},
+        "thursday": {"breakfast": <bool>, "lunch": <bool>, "dinner": <bool>},
+        "friday": {"breakfast": <bool>, "lunch": <bool>, "dinner": <bool>},
+        "saturday": {"breakfast": <bool>, "lunch": <bool>, "dinner": <bool>},
+        "sunday": {"breakfast": <bool>, "lunch": <bool>, "dinner": <bool>}
+    }
 }
+Infer the schedule based on the user's statements. E.g., "I work 9-5 so I eat out for lunch" -> Weekday Lunches = False. "I cook specific meals" -> Set those to True. Default to Dinner=True if unsure.
 
 Conversation to analyze:
 {conversation}
@@ -586,7 +613,7 @@ class OnboardingConversationHandler:
             ),
             dietary_preferences=dietary_prefs,
             allergies_dislikes=extracted_data.get("allergies_dislikes", []),
-            cooking_frequency_per_week=extracted_data.get("cooking_frequency_per_week", 3),
+            meal_schedule=WeeklySchedule(**extracted_data.get("meal_schedule", {})),
         )
         
         # Save to Firestore
@@ -637,7 +664,7 @@ class OnboardingConversationHandler:
                 "household": {"adults": 1, "children": 0},
                 "dietary_preferences": [],
                 "allergies_dislikes": [],
-                "cooking_frequency_per_week": 3,
+                "meal_schedule": {},
             }
 
     async def _save_to_firestore(self, profile: UserProfile) -> None:
@@ -674,7 +701,7 @@ class OnboardingConversationHandler:
                 household=HouseholdInfo(**data["household"]),
                 dietary_preferences=data.get("dietary_preferences", []),
                 allergies_dislikes=data.get("allergies_dislikes", []),
-                cooking_frequency_per_week=data.get("cooking_frequency_per_week", 3),
+                meal_schedule=WeeklySchedule(**data.get("meal_schedule", {})),
                 created_at=data.get("created_at", datetime.now(timezone.utc)),
             )
         except Exception as e:
