@@ -1,0 +1,80 @@
+# GitHub Actions workflow for deploying Menu Generator Job to Cloud Run
+# 
+# Required secrets:
+#   - GCP_PROJECT_ID: Your Google Cloud project ID
+#   - GCP_SA_KEY: Service account JSON key with Cloud Run Admin and Storage Admin roles
+
+name: Deploy Menu Generator Job
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'menu_generator.py'
+      - 'run_batch_job.py'
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - '.github/workflows/deploy-menu-job.yml'
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  JOB_NAME: menu-generator-job
+  IMAGE_NAME: menu-generator
+  REPO_NAME: onboarding-repo
+  REGION: us-central1
+
+jobs:
+  deploy-job:
+    name: Build and Deploy Job
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build Docker image
+        run: |
+          docker build -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker tag us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+                     us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Push Docker image
+        run: |
+          docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Deploy Cloud Run Job
+        run: |
+          gcloud run jobs deploy ${{ env.JOB_NAME }} \
+            --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --command python \
+            --args run_batch_job.py \
+            --set-env-vars "GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }},VERTEX_AI_LOCATION=${{ env.REGION }}" \
+            --max-retries 0 \
+            --task-timeout 10m
+
+      - name: Execute Job (Optional Verification)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "Executing job manually..."
+          gcloud run jobs execute ${{ env.JOB_NAME }} --region ${{ env.REGION }} --wait
