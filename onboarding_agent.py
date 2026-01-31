@@ -612,7 +612,7 @@ class OnboardingConversationHandler:
         
         Uses JSON mode for reliable structured output.
         """
-        extraction_prompt = EXTRACTION_PROMPT.format(conversation=conversation_text)
+        extraction_prompt = EXTRACTION_PROMPT.replace("{conversation}", conversation_text)
         
         try:
             response = self.model.generate_content(
