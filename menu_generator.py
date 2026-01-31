@@ -187,6 +187,7 @@ class MenuGenerator:
                     temperature=0.7,
                     max_output_tokens=8192,
                     response_mime_type="application/json",
+                    response_schema=WeeklyMenu.model_json_schema(),
                 ),
             )
             
