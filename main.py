@@ -10,6 +10,8 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from onboarding_agent import (
@@ -101,6 +103,23 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for simplicity (or configure for Cloud Run domain)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount the frontend static files
+# Note: This checks for the 'frontend' directory. In Docker, valid. Locally, valid.
+# API routes defined below will take precedence if order matters, but for mount it's usually fine.
+# We mount it at the end to avoid conflicts, but here is fine too as specific routes match first.
+# Actually, let's mount it at the end of the file or ensure it doesn't swallow API calls.
+# FastAPI router matches specific paths first usually.
+
 
 
 # =============================================================================
@@ -266,6 +285,11 @@ async def get_user_profile(user_id: str):
         )
     
     return profile.to_firestore_dict()
+
+
+# Mount static files (Frontend)
+# html=True allows serving index.html at root /
+app.mount("/", StaticFiles(directory="frontend", html=True), name="static")
 
 
 # =============================================================================

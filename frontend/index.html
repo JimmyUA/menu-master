@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu Master Onboarding</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="logo">✨ Menu Master</div>
+        </header>
+
+        <!-- Chat Area -->
+        <main class="chat-container" id="chatContainer">
+            <div class="message assistant">
+                <div class="bubble">
+                    👋 Welcome to Menu Master! Please start a session to begin.
+                </div>
+            </div>
+        </main>
+
+        <!-- Input Area -->
+        <footer class="input-area">
+            <input type="text" id="messageInput" placeholder="Type your answer..." disabled>
+            <button id="sendBtn" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </footer>
+    </div>
+
+    <!-- Start Session Modal -->
+    <div class="modal-overlay" id="startModal">
+        <div class="modal">
+            <h2>Start your Journey</h2>
+            <p>Tell us where you are to get started.</p>
+            <form id="startForm">
+                <div class="form-group">
+                    <label>City</label>
+                    <input type="text" id="cityInput" placeholder="e.g. Kyiv" required>
+                </div>
+                <div class="form-group">
+                    <label>Country</label>
+                    <input type="text" id="countryInput" placeholder="e.g. Ukraine" required>
+                </div>
+                <button type="submit" class="primary-btn">Start Conversation</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Final Profile Modal -->
+    <div class="modal-overlay hidden" id="profileModal">
+        <div class="modal large">
+            <h2>Profile Created! 🎉</h2>
+            <p>Here is what we captured:</p>
+            <pre id="profileResult"></pre>
+            <button onclick="location.reload()" class="secondary-btn">Start Over</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
