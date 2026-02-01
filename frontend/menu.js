@@ -3,6 +3,7 @@ const API_BASE = window.location.origin;
 // State
 let currentMenu = null;
 let allDishes = [];
+let currentUser = null;
 
 // Elements
 const weekDateEl = document.getElementById('weekDate');
@@ -19,22 +20,22 @@ const modalSteps = document.getElementById('modalSteps');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    // Try to get user ID from localStorage (set during onboarding)
-    // For now, we might need a way to mock this or get it from URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    let userId = urlParams.get('user_id');
-
-    if (!userId) {
-        // Fallback to localStorage if available (assuming app.js sets it)
-        userId = localStorage.getItem('menu_master_user_id');
-    }
-
-    // Temporary: If still no user ID, show error or prompt
-    // For dev ease, let's look for a hardcoded one or prompt
-    if (!userId) {
-        dishGridEl.innerHTML = '<div class="error-msg">No user ID found. Please go through onboarding first.</div>';
+    // Auth check
+    if (!window.authUtils || !window.authUtils.isAuthenticated()) {
+        window.location.href = '/login.html';
         return;
     }
+
+    currentUser = window.authUtils.getUserFromToken();
+
+    // If not onboarded, redirect to onboarding
+    if (currentUser && !currentUser.is_onboarded) {
+        window.location.href = '/';
+        return;
+    }
+
+    // Get user ID from auth token
+    const userId = currentUser.user_id;
 
     fetchMenu(userId);
 });

@@ -1,6 +1,23 @@
 const API_BASE = window.location.origin; // Dynamically use current origin
 let sessionId = null;
 let profile = null;
+let currentUser = null;
+
+// Auth check at startup
+(function checkAuth() {
+    if (!window.authUtils || !window.authUtils.isAuthenticated()) {
+        window.location.href = '/login.html';
+        return;
+    }
+
+    currentUser = window.authUtils.getUserFromToken();
+
+    // If already onboarded, redirect to menu
+    if (currentUser && currentUser.is_onboarded) {
+        window.location.href = '/menu.html';
+        return;
+    }
+})();
 
 // DOM Elements
 const startModal = document.getElementById('startModal');
@@ -91,12 +108,15 @@ async function finalizeProfile() {
     addMessage("Creating your profile...", 'assistant');
 
     try {
-        // Find user ID (simulated or generated) - using session ID for now as user ID
-        const userId = "user_" + sessionId.split('-')[0];
+        // Get user ID from auth token
+        const userId = currentUser ? currentUser.user_id : sessionId;
 
         const response = await fetch(`${API_BASE}/onboarding/finalize`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${window.authUtils.getToken()}`
+            },
             body: JSON.stringify({
                 session_id: sessionId,
                 user_id: userId
@@ -106,9 +126,6 @@ async function finalizeProfile() {
         const data = await response.json();
 
         if (data.success) {
-            // Save user ID for menu page
-            localStorage.setItem('menu_master_user_id', userId);
-
             profile = data.profile;
             showProfileModal(profile);
         }

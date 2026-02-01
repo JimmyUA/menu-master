@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Menu Master</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body class="auth-page">
+    <div class="app-container auth-container">
+        <!-- Header -->
+        <header>
+            <div class="logo">✨ Menu Master</div>
+        </header>
+
+        <main class="auth-content">
+            <div class="auth-card">
+                <h1 id="authTitle">Welcome Back</h1>
+                <p id="authSubtitle">Sign in to access your personalized meal plans</p>
+
+                <!-- Google Sign-In Button -->
+                <div class="google-signin-container">
+                    <div id="g_id_onload"
+                         data-client_id="YOUR_GOOGLE_CLIENT_ID"
+                         data-context="signin"
+                         data-ux_mode="popup"
+                         data-callback="handleGoogleSignIn"
+                         data-auto_prompt="false">
+                    </div>
+                    <div class="g_id_signin"
+                         data-type="standard"
+                         data-shape="rectangular"
+                         data-theme="outline"
+                         data-text="signin_with"
+                         data-size="large"
+                         data-logo_alignment="left">
+                    </div>
+                </div>
+
+                <div class="auth-divider">
+                    <span>or</span>
+                </div>
+
+                <!-- Email/Password Form -->
+                <form id="authForm">
+                    <div class="form-group">
+                        <label for="emailInput">Email</label>
+                        <input type="email" id="emailInput" placeholder="you@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="passwordInput">Password</label>
+                        <input type="password" id="passwordInput" placeholder="••••••••" required minlength="6">
+                    </div>
+                    <button type="submit" class="primary-btn" id="submitBtn">Sign In</button>
+                </form>
+
+                <div class="auth-switch">
+                    <span id="switchText">Don't have an account?</span>
+                    <button type="button" id="switchBtn" class="link-btn">Sign Up</button>
+                </div>
+
+                <div id="errorMessage" class="error-message hidden"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="auth.js"></script>
+</body>
+</html>

@@ -11,10 +11,20 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+from auth import (
+    AuthService,
+    Token,
+    SignupRequest,
+    LoginRequest,
+    GoogleAuthRequest,
+    UserResponse,
+    get_current_user,
+)
 
 from onboarding_agent import (
     OnboardingConversationHandler,
@@ -119,15 +129,16 @@ class HealthResponse(BaseModel):
 # Application Setup
 # =============================================================================
 
-# Global handler instance
+# Global handler instances
 handler: Optional[OnboardingConversationHandler] = None
 menu_generator: Optional[MenuGenerator] = None
+auth_service: Optional[AuthService] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize resources on startup."""
-    global handler, menu_generator
+    global handler, menu_generator, auth_service
     
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
     if not project_id:
@@ -153,11 +164,22 @@ async def lifespan(app: FastAPI):
         print(f"Failed to initialize real MenuGenerator: {e}. Using Mock.")
         menu_generator = MockMenuGenerator(project_id, location)
     
+    # Initialize auth service
+    try:
+        from google.cloud import firestore
+        db = firestore.Client(project=project_id)
+        auth_service = AuthService(db)
+        print("AuthService initialized successfully")
+    except Exception as e:
+        print(f"Failed to initialize AuthService: {e}")
+        auth_service = None
+    
     yield
     
     # Cleanup if needed
     handler = None
     menu_generator = None
+    auth_service = None
 
 
 app = FastAPI(
@@ -193,6 +215,85 @@ app.add_middleware(
 async def health_check():
     """Health check endpoint for Cloud Run."""
     return HealthResponse(status="healthy")
+
+
+# =============================================================================
+# Auth Endpoints
+# =============================================================================
+
+@app.post("/auth/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
+async def signup(request: SignupRequest):
+    """Create a new user with email/password."""
+    if not auth_service:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Auth service not initialized"
+        )
+    
+    return auth_service.signup_with_email(request.email, request.password)
+
+
+@app.post("/auth/login", response_model=Token)
+async def login(request: LoginRequest):
+    """Authenticate with email/password."""
+    if not auth_service:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Auth service not initialized"
+        )
+    
+    return auth_service.login_with_email(request.email, request.password)
+
+
+@app.post("/auth/google", response_model=Token)
+async def google_auth(request: GoogleAuthRequest):
+    """Authenticate with Google ID token."""
+    if not auth_service:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Auth service not initialized"
+        )
+    
+    return auth_service.auth_with_google(request.credential)
+
+
+@app.get("/auth/me", response_model=UserResponse)
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """Get current authenticated user info."""
+    return UserResponse(
+        user_id=current_user["user_id"],
+        email=current_user["email"],
+        is_onboarded=current_user["is_onboarded"],
+    )
+
+
+@app.post("/test/mark-onboarded")
+async def mark_user_onboarded(current_user: dict = Depends(get_current_user)):
+    """
+    TEST ONLY: Mark the current user as onboarded.
+    This endpoint is for testing purposes only.
+    """
+    if not auth_service:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Auth service not initialized"
+        )
+    
+    auth_service.set_onboarded(current_user["user_id"])
+    
+    # Return a new token with updated onboarded status
+    new_token = create_access_token(
+        user_id=current_user["user_id"],
+        email=current_user["email"],
+        is_onboarded=True
+    )
+    
+    return {
+        "success": True,
+        "access_token": new_token,
+        "user_id": current_user["user_id"],
+        "is_onboarded": True
+    }
 
 
 @app.post(
@@ -274,6 +375,7 @@ async def finalize_profile(request: FinalizeProfileRequest):
     
     Extracts structured data from the conversation using Gemini
     and saves the profile to Firestore.
+    Also marks the user as onboarded and triggers first menu generation.
     """
     if not handler:
         raise HTTPException(
@@ -286,6 +388,24 @@ async def finalize_profile(request: FinalizeProfileRequest):
             user_id=request.user_id,
             session_id=request.session_id,
         )
+        
+        # Mark user as onboarded in auth system
+        if auth_service:
+            try:
+                auth_service.set_onboarded(request.user_id)
+                print(f"User {request.user_id} marked as onboarded")
+            except Exception as e:
+                print(f"Failed to mark user as onboarded: {e}")
+        
+        # Trigger first menu generation for this user
+        if menu_generator and hasattr(menu_generator, 'generate_menu_for_user'):
+            try:
+                print(f"Triggering first menu generation for user {request.user_id}")
+                menu_generator.generate_menu_for_user(request.user_id)
+                print(f"First menu generated for user {request.user_id}")
+            except Exception as e:
+                print(f"Failed to generate first menu: {e}")
+                # Don't fail the request - menu can be generated later
         
         return FinalizeProfileResponse(
             profile=profile.to_firestore_dict(),
