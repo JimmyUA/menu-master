@@ -1,22 +1,35 @@
-const API_BASE = window.location.origin; // Dynamically use current origin
+// API_BASE is already defined in auth.js, so we just use it from there
 let sessionId = null;
 let profile = null;
 let currentUser = null;
 
-// Auth check at startup
+// Auth check at startup - run immediately
 (function checkAuth() {
-    if (!window.authUtils || !window.authUtils.isAuthenticated()) {
+    // Check if authUtils exists
+    if (typeof window.authUtils === 'undefined') {
+        console.error('authUtils not loaded, redirecting to login');
         window.location.href = '/login.html';
         return;
     }
 
+    // Check if user is authenticated
+    if (!window.authUtils.isAuthenticated()) {
+        console.log('User not authenticated, redirecting to login');
+        window.location.href = '/login.html';
+        return;
+    }
+
+    // Get user info from token
     currentUser = window.authUtils.getUserFromToken();
 
     // If already onboarded, redirect to menu
     if (currentUser && currentUser.is_onboarded) {
+        console.log('User already onboarded, redirecting to menu');
         window.location.href = '/menu.html';
         return;
     }
+
+    console.log('User authenticated and not onboarded, showing onboarding');
 })();
 
 // DOM Elements
