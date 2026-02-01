@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,6 +12,7 @@
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
+
 <body class="auth-page">
     <div class="app-container auth-container">
         <!-- Header -->
@@ -26,19 +28,12 @@
                 <!-- Google Sign-In Button -->
                 <div class="google-signin-container">
                     <div id="g_id_onload"
-                         data-client_id="YOUR_GOOGLE_CLIENT_ID"
-                         data-context="signin"
-                         data-ux_mode="popup"
-                         data-callback="handleGoogleSignIn"
-                         data-auto_prompt="false">
+                        data-client_id="516274875851-oq3s51v4b903uafckuknm82ni7262017.apps.googleusercontent.com"
+                        data-context="signin" data-ux_mode="popup" data-callback="handleGoogleSignIn"
+                        data-auto_prompt="false">
                     </div>
-                    <div class="g_id_signin"
-                         data-type="standard"
-                         data-shape="rectangular"
-                         data-theme="outline"
-                         data-text="signin_with"
-                         data-size="large"
-                         data-logo_alignment="left">
+                    <div class="g_id_signin" data-type="standard" data-shape="rectangular" data-theme="outline"
+                        data-text="signin_with" data-size="large" data-logo_alignment="left">
                     </div>
                 </div>
 
@@ -71,4 +66,5 @@
 
     <script src="auth.js"></script>
 </body>
+
 </html>
