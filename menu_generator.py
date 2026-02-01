@@ -12,14 +12,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from google.cloud import firestore
-import vertexai
-from vertexai.generative_models import (
-    GenerativeModel,
-    GenerationConfig,
-    HarmCategory,
-    HarmBlockThreshold,
-)
+# Delayed imports for google.cloud and vertexai to allow module loading without dependencies
+# from google.cloud import firestore
+# import vertexai
+# ...
 from pydantic import BaseModel, Field
 
 from onboarding_agent import UserProfile, LocationData, HouseholdInfo, WeeklySchedule, DailyMeals
@@ -164,19 +160,33 @@ class MenuGenerator:
         self.menu_collection = menu_collection
         self.user_collection = user_collection
 
+        self.menu_collection = menu_collection
+        self.user_collection = user_collection
+
         # Initialize Vertex AI
         try:
+            import vertexai
+            from vertexai.generative_models import GenerativeModel
             vertexai.init(project=project_id, location=location)
             self.model = GenerativeModel("gemini-2.0-flash-001")
             logger.info("Vertex AI initialized successfully")
+        except ImportError:
+             logger.error("Vertex AI libraries not installed.")
+             if os.environ.get("MOCK_MODE") != "true":
+                 raise
         except Exception as e:
             logger.error(f"Failed to initialize Vertex AI: {e}")
             raise
 
         # Initialize Firestore
         try:
+            from google.cloud import firestore
             self.db = firestore.Client(project=project_id)
             logger.info("Firestore client initialized successfully")
+        except ImportError:
+             logger.error("Firestore libraries not installed.")
+             if os.environ.get("MOCK_MODE") != "true":
+                 raise
         except Exception as e:
             logger.error(f"Failed to initialize Firestore: {e}")
             raise
@@ -200,6 +210,7 @@ class MenuGenerator:
         )
 
         try:
+            from vertexai.generative_models import GenerationConfig
             response = self.model.generate_content(
                 prompt,
                 generation_config=GenerationConfig(
@@ -278,6 +289,33 @@ class MenuGenerator:
         except Exception as e:
             logger.error(f"Error saving menu for {user_id}: {e}")
             raise
+
+    def get_latest_menu(self, user_id: str) -> Optional[GeneratedMenuDocument]:
+        """Retrieve the latest generated menu for a user."""
+        try:
+            # Query for user's menus
+            from google.cloud import firestore
+            docs = self.db.collection(self.menu_collection).where("user_id", "==", user_id).stream()
+            
+            all_menus = []
+            for doc in docs:
+                try:
+                    all_menus.append(GeneratedMenuDocument(**doc.to_dict()))
+                except Exception as parse_error:
+                    logger.warning(f"Skipping invalid menu document {doc.id}: {parse_error}")
+                    continue
+            
+            if not all_menus:
+                return None
+            
+            # Sort by week_start_date descending (YYYY-MM-DD string sort works)
+            all_menus.sort(key=lambda x: x.week_start_date, reverse=True)
+            
+            return all_menus[0]
+            
+        except Exception as e:
+            logger.error(f"Error retrieving latest menu for {user_id}: {e}")
+            return None
 
     def process_all_users(self):
         """

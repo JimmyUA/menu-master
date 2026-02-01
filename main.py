@@ -6,6 +6,8 @@ Designed for deployment on Cloud Run.
 """
 
 import os
+import json
+from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -19,6 +21,52 @@ from onboarding_agent import (
     UserProfile,
     LocationData,
 )
+try:
+    from menu_generator import MenuGenerator, GeneratedMenuDocument, WeeklyMenu, DailyMenu, MenuSlot
+except ImportError:
+    MenuGenerator = None
+    print("Warning: Failed to import MenuGenerator (missing dependencies?)")
+
+# =============================================================================
+# Mock Generator (Fallback)
+# =============================================================================
+class MockMenuGenerator:
+    """Fallback generator for local testing/verification without GCP credentials."""
+    
+    def __init__(self, project_id, location):
+        self.project_id = project_id
+    
+    def get_latest_menu(self, user_id: str):
+        print(f"Using MockMenuGenerator for user {user_id}")
+        # Return a dummy menu
+        return GeneratedMenuDocument(
+            user_id=user_id,
+            week_start_date="2024-01-01",
+            created_at=datetime.utcnow(),
+            menu=WeeklyMenu(
+                monday=DailyMenu(
+                    dinner=MenuSlot(
+                        name="Grilled Salmon with Asparagus",
+                        description="Fresh Atlantic salmon fillet grilled to perfection with lemon butter sauce.",
+                        ingredients=["Salmon fillet", "Asparagus", "Lemon", "Butter", "Garlic"],
+                        preparation_steps=["Season salmon", "Grill for 5 mins each side", "Sauté asparagus", "Serve with lemon butter"]
+                    )
+                ),
+                tuesday=DailyMenu(
+                    dinner=MenuSlot(
+                        name="Chicken Stir-Fry",
+                        description="Quick and healthy chicken vegetable stir-fry with soy glaze.",
+                        ingredients=["Chicken breast", "Broccoli", "Carrots", "Soy sauce", "Ginger"],
+                        preparation_steps=["Slice chicken", "Stir-fry veggies", "Cook chicken", "Combine with sauce"]
+                    )
+                ),
+                wednesday=DailyMenu(),
+                thursday=DailyMenu(),
+                friday=DailyMenu(),
+                saturday=DailyMenu(),
+                sunday=DailyMenu()
+            )
+        )
 
 
 # =============================================================================
@@ -73,12 +121,13 @@ class HealthResponse(BaseModel):
 
 # Global handler instance
 handler: Optional[OnboardingConversationHandler] = None
+menu_generator: Optional[MenuGenerator] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize resources on startup."""
-    global handler
+    global handler, menu_generator
     
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
     if not project_id:
@@ -86,15 +135,29 @@ async def lifespan(app: FastAPI):
     
     location = os.environ.get("VERTEX_AI_LOCATION", "us-central1")
     
-    handler = OnboardingConversationHandler(
-        project_id=project_id,
-        location=location,
-    )
+    try:
+        handler = OnboardingConversationHandler(
+            project_id=project_id,
+            location=location,
+        )
+    except Exception as e:
+        print(f"Failed to initialize OnboardingConversationHandler: {e}. Onboarding endpoints will be unavailable.")
+        handler = None
+
+    try:
+        menu_generator = MenuGenerator(
+            project_id=project_id,
+            location=location,
+        )
+    except Exception as e:
+        print(f"Failed to initialize real MenuGenerator: {e}. Using Mock.")
+        menu_generator = MockMenuGenerator(project_id, location)
     
     yield
     
     # Cleanup if needed
     handler = None
+    menu_generator = None
 
 
 app = FastAPI(
@@ -263,6 +326,28 @@ async def get_conversation_history(session_id: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+
+
+@app.get("/menus/{user_id}/current")
+async def get_latest_menu(user_id: str):
+    """
+    Retrieve the latest generated weekly menu for a user.
+    """
+    if not menu_generator:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service not initialized"
+        )
+    
+    menu = menu_generator.get_latest_menu(user_id)
+    
+    if not menu:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No menu found for this user"
+        )
+    
+    return menu.to_firestore_dict()
 
 
 @app.get("/users/{user_id}", response_model=dict)

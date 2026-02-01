@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Menu | Menu Master</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+
+<body class="menu-page">
+    <div class="app-container large-container">
+        <!-- Header -->
+        <header>
+            <div class="logo">✨ Menu Master</div>
+            <nav>
+                <a href="/" class="nav-link">Home</a>
+            </nav>
+        </header>
+
+        <main class="menu-content">
+            <div class="menu-header">
+                <h1>This Week's Menu</h1>
+                <p id="weekDate">Loading...</p>
+            </div>
+
+            <!-- Search -->
+            <div class="search-container">
+                <input type="text" id="dishSearch" placeholder="Search for dishes, ingredients...">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+            </div>
+
+            <!-- Grid -->
+            <div class="dish-grid" id="dishGrid">
+                <!-- Cards will be injected here -->
+                <div class="loading-state">Loading your personalized menu...</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Dish Detail Modal -->
+    <div class="modal-overlay hidden" id="dishModal">
+        <div class="modal large dish-modal">
+            <div class="modal-header">
+                <h2 id="modalTitle">Dish Name</h2>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <p id="modalDescription" class="dish-description"></p>
+
+                <div class="recipe-section">
+                    <h3>Ingredients</h3>
+                    <ul id="modalIngredients" class="ingredient-list"></ul>
+                </div>
+
+                <div class="recipe-section">
+                    <h3>Preparation</h3>
+                    <ol id="modalSteps" class="prep-list"></ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="menu.js"></script>
+</body>
+
+</html>

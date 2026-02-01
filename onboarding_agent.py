@@ -12,18 +12,12 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from google.cloud import firestore
-from google.cloud.firestore_v1.base_document import DocumentSnapshot
+# Delayed imports to allow module loading without dependencies
+# from google.cloud import firestore
+# import vertexai
+# ...
+
 from pydantic import BaseModel, Field
-import vertexai
-from vertexai.generative_models import (
-    GenerativeModel,
-    GenerationConfig,
-    Content,
-    Part,
-    HarmCategory,
-    HarmBlockThreshold,
-)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -255,7 +249,7 @@ class FirestoreSessionStore:
 
     def __init__(
         self,
-        db: firestore.Client,
+        db: "firestore.Client",
         collection_name: str = "onboarding_sessions",
         session_ttl_hours: int = 1,
     ):
@@ -380,18 +374,25 @@ class OnboardingConversationHandler:
         
         # Initialize Vertex AI
         try:
+            import vertexai
+            from vertexai.generative_models import GenerativeModel, HarmCategory, HarmBlockThreshold
             vertexai.init(project=project_id, location=location)
             self.model = GenerativeModel(
                 "gemini-2.0-flash-001",
                 system_instruction=SYSTEM_INSTRUCTION,
             )
             logger.info("Vertex AI initialized successfully")
+        except ImportError:
+             logger.error("Vertex AI libraries not installed.")
+             if os.environ.get("MOCK_MODE") != "true":
+                 raise
         except Exception as e:
             logger.error(f"Failed to initialize Vertex AI: {e}")
             raise
 
         # Initialize Firestore
         try:
+            from google.cloud import firestore
             self.db = firestore.Client(project=project_id)
             self.session_store = FirestoreSessionStore(
                 db=self.db,
@@ -399,6 +400,10 @@ class OnboardingConversationHandler:
                 session_ttl_hours=1,
             )
             logger.info("Firestore client initialized successfully")
+        except ImportError:
+             logger.error("Firestore libraries not installed.")
+             if os.environ.get("MOCK_MODE") != "true":
+                 raise
         except Exception as e:
             logger.error(f"Failed to initialize Firestore: {e}")
             raise
@@ -406,12 +411,16 @@ class OnboardingConversationHandler:
         # Note: Sessions are now stored in Firestore via self.session_store
 
         # Safety settings for the model
-        self._safety_settings = {
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-        }
+        try:
+            from vertexai.generative_models import HarmCategory, HarmBlockThreshold
+            self._safety_settings = {
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            }
+        except ImportError:
+            self._safety_settings = {}
 
     def start_conversation(self, location_data: dict) -> tuple[str, str]:
         """
@@ -435,6 +444,7 @@ class OnboardingConversationHandler:
         
         # Generate initial message using cold-start prompt
         try:
+            from vertexai.generative_models import GenerationConfig
             cold_start_prompt = get_cold_start_prompt(location)
             
             response = self.model.generate_content(
@@ -490,6 +500,7 @@ class OnboardingConversationHandler:
         contents = self._build_chat_history(session)
         
         try:
+            from vertexai.generative_models import GenerationConfig
             # Generate response
             response = self.model.generate_content(
                 contents,
@@ -518,17 +529,20 @@ class OnboardingConversationHandler:
         
         return assistant_message, is_complete
 
-    def _build_chat_history(self, session: ConversationState) -> list[Content]:
+    def _build_chat_history(self, session: ConversationState) -> list["vertexai.generative_models.Content"]:
         """Build Vertex AI Content objects from chat history."""
-        contents = []
-        
-        for msg in session.messages:
-            role = "user" if msg.role == "user" else "model"
-            contents.append(
-                Content(role=role, parts=[Part.from_text(msg.content)])
-            )
-        
-        return contents
+        try:
+            from vertexai.generative_models import Content, Part
+            contents = []
+            
+            for msg in session.messages:
+                role = "user" if msg.role == "user" else "model"
+                contents.append(
+                    Content(role=role, parts=[Part.from_text(msg.content)])
+                )
+            return contents
+        except ImportError:
+            return []
 
     def _check_conversation_complete(self, session: ConversationState) -> bool:
         """
@@ -642,6 +656,7 @@ class OnboardingConversationHandler:
         extraction_prompt = EXTRACTION_PROMPT.replace("{conversation}", conversation_text)
         
         try:
+            from vertexai.generative_models import GenerationConfig
             response = self.model.generate_content(
                 extraction_prompt,
                 generation_config=GenerationConfig(
@@ -689,7 +704,7 @@ class OnboardingConversationHandler:
         """
         try:
             doc_ref = self.db.collection(self.firestore_collection).document(user_id)
-            doc: DocumentSnapshot = doc_ref.get()
+            doc = doc_ref.get()
             
             if not doc.exists:
                 return None

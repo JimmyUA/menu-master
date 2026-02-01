@@ -106,6 +106,9 @@ async function finalizeProfile() {
         const data = await response.json();
 
         if (data.success) {
+            // Save user ID for menu page
+            localStorage.setItem('menu_master_user_id', userId);
+
             profile = data.profile;
             showProfileModal(profile);
         }
@@ -147,5 +150,24 @@ function setLoading(isLoading) {
 
 function showProfileModal(data) {
     profileResult.textContent = JSON.stringify(data, null, 2);
+
+    // Add View Menu Button if not already there
+    let menuBtn = document.getElementById('viewMenuBtn');
+    if (!menuBtn) {
+        menuBtn = document.createElement('a');
+        menuBtn.id = 'viewMenuBtn';
+        menuBtn.href = '/menu.html';
+        menuBtn.className = 'primary-btn';
+        menuBtn.style.textAlign = 'center';
+        menuBtn.style.display = 'block';
+        menuBtn.style.marginBottom = '1rem';
+        menuBtn.style.textDecoration = 'none';
+        menuBtn.textContent = 'View My Menu 🍲';
+
+        // Insert before 'Start Over' button
+        const startOverBtn = profileModal.querySelector('.secondary-btn');
+        profileModal.querySelector('.modal').insertBefore(menuBtn, startOverBtn);
+    }
+
     profileModal.classList.remove('hidden');
 }
