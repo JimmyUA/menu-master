@@ -684,12 +684,26 @@ class OnboardingConversationHandler:
 
     async def _save_to_firestore(self, profile: UserProfile) -> None:
         """Save user profile to Firestore."""
+        logger.info(f"Attempting to save profile to Firestore: user_id={profile.user_id}, collection={self.firestore_collection}")
         try:
+            profile_dict = profile.to_firestore_dict()
+            logger.info(f"Profile dict prepared: {profile_dict}")
+            
             doc_ref = self.db.collection(self.firestore_collection).document(profile.user_id)
-            doc_ref.set(profile.to_firestore_dict())
-            logger.info(f"Saved profile to Firestore: {profile.user_id}")
+            logger.info(f"Document reference created: {doc_ref.path}")
+            
+            doc_ref.set(profile_dict)
+            
+            # Verify the write
+            verify_doc = doc_ref.get()
+            if verify_doc.exists:
+                logger.info(f"Successfully saved and verified profile in Firestore: {profile.user_id}")
+            else:
+                logger.error(f"Write appeared to succeed but document not found: {profile.user_id}")
+                raise RuntimeError("Document write verification failed")
+                
         except Exception as e:
-            logger.error(f"Error saving to Firestore: {e}")
+            logger.error(f"Error saving to Firestore: {type(e).__name__}: {e}")
             raise RuntimeError(f"Failed to save profile to Firestore: {e}")
 
     async def get_user_profile(self, user_id: str) -> Optional[UserProfile]:
