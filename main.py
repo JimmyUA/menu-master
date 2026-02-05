@@ -500,6 +500,52 @@ async def get_user_profile(user_id: str):
     return profile.to_firestore_dict()
 
 
+@app.get("/debug/user/{user_id}")
+async def debug_user_status(user_id: str):
+    """
+    Debug endpoint to check user status across all collections.
+    """
+    result = {
+        "user_id": user_id,
+        "auth_user": "Not checked",
+        "profile": "Not checked", 
+        "menu": "Not checked",
+        "handlers": {
+            "auth_service": auth_service is not None,
+            "handler": handler is not None,
+            "menu_generator": menu_generator is not None
+        }
+    }
+    
+    # Check Auth
+    if auth_service:
+        try:
+            user = auth_service.get_user_by_id(user_id)
+            result["auth_user"] = "Found" if user else "Not Found"
+        except Exception as e:
+            result["auth_user"] = f"Error: {e}"
+            
+    # Check Profile
+    if handler:
+        try:
+            profile = await handler.get_user_profile(user_id)
+            result["profile"] = "Found" if profile else "Not Found"
+            if profile:
+                result["profile_data_preview"] = str(profile.to_firestore_dict())[:100]
+        except Exception as e:
+            result["profile"] = f"Error: {e}"
+            
+    # Check Menu
+    if menu_generator:
+        try:
+            menu = menu_generator.get_latest_menu(user_id)
+            result["menu"] = "Found" if menu else "Not Found"
+        except Exception as e:
+            result["menu"] = f"Error: {e}"
+            
+    return result
+
+
 # Mount static files (Frontend)
 # html=True allows serving index.html at root /
 app.mount("/", StaticFiles(directory="frontend", html=True), name="static")
