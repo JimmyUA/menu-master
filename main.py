@@ -77,6 +77,14 @@ class MockMenuGenerator:
                 sunday=DailyMenu()
             )
         )
+    
+    def generate_menu_for_user(self, user_id: str) -> bool:
+        """Mock menu generation - returns True immediately for testing."""
+        print(f"MockMenuGenerator: Generating menu for user {user_id}")
+        # In mock mode, get_latest_menu always returns a dummy menu,
+        # so we don't need to actually persist anything
+        print(f"MockMenuGenerator: Mock menu ready for user {user_id}")
+        return True
 
 
 # =============================================================================

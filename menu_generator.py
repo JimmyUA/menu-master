@@ -317,6 +317,55 @@ class MenuGenerator:
             logger.error(f"Error retrieving latest menu for {user_id}: {e}")
             return None
 
+    def generate_menu_for_user(self, user_id: str) -> bool:
+        """
+        Generate a menu for a single user by fetching their profile.
+        
+        This is triggered after onboarding is complete.
+        Returns True if successful, False otherwise.
+        """
+        logger.info(f"Generating menu for newly onboarded user: {user_id}")
+        
+        try:
+            # Fetch user profile from Firestore
+            user_doc = self.db.collection(self.user_collection).document(user_id).get()
+            
+            if not user_doc.exists:
+                logger.error(f"User profile not found: {user_id}")
+                return False
+            
+            user_data = user_doc.to_dict()
+            
+            # Reconstruct UserProfile from Firestore data
+            user_profile = UserProfile(
+                user_id=user_data.get("user_id", user_id),
+                location=LocationData(**user_data.get("location", {})),
+                household=HouseholdInfo(**user_data.get("household", {"adults": 1, "children": 0})),
+                dietary_preferences=user_data.get("dietary_preferences", []),
+                allergies_dislikes=user_data.get("allergies_dislikes", []),
+                meal_schedule=WeeklySchedule(**user_data.get("meal_schedule", {})),
+            )
+            
+            # Calculate this week's start date (current Monday)
+            today = datetime.now()
+            current_monday = today - timedelta(days=today.weekday())
+            week_start_date = current_monday.strftime("%Y-%m-%d")
+            
+            # Generate the menu
+            menu = self.generate_weekly_menu(user_profile, week_start_date)
+            
+            if menu:
+                self.save_menu(user_id, week_start_date, menu)
+                logger.info(f"Successfully generated first menu for user {user_id}")
+                return True
+            else:
+                logger.error(f"Failed to generate menu content for user {user_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error generating menu for user {user_id}: {e}")
+            return False
+
     def process_all_users(self):
         """
         Batch process to generate menus for all users.
