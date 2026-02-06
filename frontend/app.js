@@ -140,6 +140,13 @@ async function finalizeProfile() {
 
         if (data.success) {
             profile = data.profile;
+
+            // Save the new token with is_onboarded=true
+            if (data.access_token) {
+                window.authUtils.setToken(data.access_token);
+                console.log('Saved new token with is_onboarded=true');
+            }
+
             showProfileModal(profile);
         }
 
@@ -148,6 +155,7 @@ async function finalizeProfile() {
         addMessage("Something went wrong creating your profile.", 'assistant');
     }
 }
+
 
 // Helpers
 function addMessage(text, role) {

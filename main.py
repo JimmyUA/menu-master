@@ -24,6 +24,7 @@ from auth import (
     GoogleAuthRequest,
     UserResponse,
     get_current_user,
+    create_access_token,
 )
 
 from onboarding_agent import (
@@ -125,6 +126,7 @@ class FinalizeProfileResponse(BaseModel):
     """Response with the created user profile."""
     profile: dict
     success: bool
+    access_token: Optional[str] = None  # New token with is_onboarded=true
 
 
 class HealthResponse(BaseModel):
@@ -397,11 +399,22 @@ async def finalize_profile(request: FinalizeProfileRequest):
             session_id=request.session_id,
         )
         
-        # Mark user as onboarded in auth system
+        # Mark user as onboarded in auth system and get new token
+        new_token = None
         if auth_service:
             try:
                 auth_service.set_onboarded(request.user_id)
                 print(f"User {request.user_id} marked as onboarded")
+                
+                # Get user email to create new token
+                user = auth_service.get_user_by_id(request.user_id)
+                if user:
+                    new_token = create_access_token(
+                        user_id=request.user_id,
+                        email=user.email,
+                        is_onboarded=True
+                    )
+                    print(f"Generated new token for user {request.user_id} with is_onboarded=True")
             except Exception as e:
                 print(f"Failed to mark user as onboarded: {e}")
         
@@ -418,6 +431,7 @@ async def finalize_profile(request: FinalizeProfileRequest):
         return FinalizeProfileResponse(
             profile=profile.to_firestore_dict(),
             success=True,
+            access_token=new_token,
         )
     
     except ValueError as e:
