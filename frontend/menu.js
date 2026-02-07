@@ -1,4 +1,5 @@
-const API_BASE = window.location.origin;
+// API_BASE is defined in auth.js
+// const API_BASE = window.location.origin;
 
 // State
 let currentMenu = null;
@@ -19,17 +20,25 @@ const modalIngredients = document.getElementById('modalIngredients');
 const modalSteps = document.getElementById('modalSteps');
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+console.log("Menu.js: Script Execution Started");
+
+function initMenu() {
+    console.log("Menu.js: initMenu called");
+
     // Auth check
     if (!window.authUtils || !window.authUtils.isAuthenticated()) {
+        console.log("Menu.js: Not authenticated, redirecting...");
         window.location.href = '/login.html';
         return;
     }
 
+    console.log("Menu.js: Authenticated");
     currentUser = window.authUtils.getUserFromToken();
+    console.log("Menu.js: Current user", currentUser);
 
     // If not onboarded, redirect to onboarding
     if (currentUser && !currentUser.is_onboarded) {
+        console.log("Menu.js: Not onboarded, redirecting...");
         window.location.href = '/';
         return;
     }
@@ -37,20 +46,44 @@ document.addEventListener('DOMContentLoaded', () => {
     // Get user ID from auth token
     const userId = currentUser.user_id;
 
+    console.log(`Menu.js: Fetching menu for ${userId}`);
     fetchMenu(userId);
-});
+}
+
+// Robust initialization
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMenu);
+} else {
+    // DOM is already ready
+    initMenu();
+}
+
+console.log("Menu.js: Script Loaded (Listeners attached)");
+
+// Make fetchMenu available globally for debugging
+window.fetchMenu = fetchMenu;
 
 // Fetch Menu
 async function fetchMenu(userId) {
     try {
-        const response = await fetch(`${API_BASE}/menus/${userId}/current`);
+        const token = localStorage.getItem('menu_master_token') || localStorage.getItem('token');
+        if (!token) {
+            throw new Error('No authentication token found');
+        }
+
+        const response = await fetch(`${API_BASE}/menus/${userId}/current`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
 
         if (!response.ok) {
             if (response.status === 404) {
                 renderEmptyState();
                 return;
             }
-            throw new Error('Failed to fetch menu');
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch menu: ${response.status} ${errorText}`);
         }
 
         const data = await response.json();
@@ -61,7 +94,7 @@ async function fetchMenu(userId) {
         renderDishes(allDishes);
 
     } catch (error) {
-        console.error(error);
+        console.error('Error fetching menu:', error);
         dishGridEl.innerHTML = `<div class="error-msg">Error loading menu: ${error.message}</div>`;
     }
 }

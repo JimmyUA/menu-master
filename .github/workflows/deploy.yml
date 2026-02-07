@@ -61,7 +61,7 @@ jobs:
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars "GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }},VERTEX_AI_LOCATION=${{ env.REGION }}"
+            --set-env-vars "GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }},VERTEX_AI_LOCATION=${{ env.REGION }},GOOGLE_CLIENT_ID=516274875851-oq3s51v4b903uafckuknm82ni7262017.apps.googleusercontent.com"
 
       - name: Show deployment URL
         run: |

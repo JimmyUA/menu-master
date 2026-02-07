@@ -736,3 +736,89 @@ class OnboardingConversationHandler:
         except Exception as e:
             logger.error(f"Error retrieving profile: {e}")
             return None
+
+
+# =============================================================================
+# Mock Converstation Handler
+# =============================================================================
+
+class MockOnboardingConversationHandler:
+    """Mock handler for local testing without Gemini/Vertex AI."""
+    
+    def __init__(self, project_id: str = "mock-project", location: str = "us-central1"):
+        self.project_id = project_id
+        self.location = location
+        self.sessions = {}  # {session_id: ConversationState}
+        self.profiles = {}  # {user_id: UserProfile}
+        print("MockOnboardingConversationHandler initialized")
+
+    def start_conversation(self, location_data: dict) -> tuple[str, str]:
+        session_id = str(uuid.uuid4())
+        location = LocationData(**location_data)
+        
+        session = ConversationState(
+            session_id=session_id,
+            location=location,
+        )
+        
+        initial_message = (
+            f"Hi! I see you're in {location.city}. "
+            "I'd love to help personalize your meal planning experience. "
+            "First, could you tell me about your household - how many people will you be cooking for?"
+        )
+        
+        session.messages.append(ChatMessage(role="assistant", content=initial_message))
+        self.sessions[session_id] = session
+        
+        return session_id, initial_message
+
+    def send_message(self, session_id: str, user_message: str) -> tuple[str, bool]:
+        if session_id not in self.sessions:
+            raise ValueError(f"Session not found: {session_id}")
+            
+        session = self.sessions[session_id]
+        session.messages.append(ChatMessage(role="user", content=user_message))
+        
+        # Simple finite state machine for mock conversation
+        user_msg_count = len([m for m in session.messages if m.role == "user"])
+        
+        if user_msg_count == 1:
+            response = "Got it. Do you have any dietary restrictions or allergies?"
+        elif user_msg_count == 2:
+            response = "Understood. Is there anything you specifically dislike?"
+        elif user_msg_count == 3:
+            response = "Noted. Finally, what's your typical cooking schedule?"
+        else:
+            response = "That's everything I need! You're all set."
+            session.is_complete = True
+            
+        session.messages.append(ChatMessage(role="assistant", content=response))
+        return response, session.is_complete
+
+    def get_chat_history(self, session_id: str) -> list[dict]:
+        if session_id not in self.sessions:
+            raise ValueError(f"Session not found: {session_id}")
+        return [{"role": m.role, "content": m.content} for m in self.sessions[session_id].messages]
+
+    async def finalize_profile(self, user_id: str, session_id: str) -> UserProfile:
+        if session_id not in self.sessions:
+            raise ValueError(f"Session not found: {session_id}")
+            
+        session = self.sessions[session_id]
+        
+        # Create dummy profile
+        profile = UserProfile(
+            user_id=user_id,
+            location=session.location,
+            household=HouseholdInfo(adults=2, children=1),
+            dietary_preferences=["Mock Preference"],
+            allergies_dislikes=["Mock Dislike"],
+            meal_schedule=WeeklySchedule()
+        )
+        
+        self.profiles[user_id] = profile
+        logger.info(f"Created mock profile for user: {user_id}")
+        return profile
+
+    async def get_user_profile(self, user_id: str) -> Optional[UserProfile]:
+        return self.profiles.get(user_id)

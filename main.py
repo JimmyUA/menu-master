@@ -150,39 +150,76 @@ async def lifespan(app: FastAPI):
     """Initialize resources on startup."""
     global handler, menu_generator, auth_service
     
+    # Check for MOCK_MODE
+    mock_mode = os.environ.get("MOCK_MODE", "false").lower() == "true"
+    
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
-    if not project_id:
+    if not project_id and not mock_mode:
         raise RuntimeError("GOOGLE_CLOUD_PROJECT environment variable is required")
+    elif not project_id:
+        project_id = "mock-project" # Fallback for local testing
     
     location = os.environ.get("VERTEX_AI_LOCATION", "us-central1")
     
-    try:
-        handler = OnboardingConversationHandler(
-            project_id=project_id,
-            location=location,
-        )
-    except Exception as e:
-        print(f"Failed to initialize OnboardingConversationHandler: {e}. Onboarding endpoints will be unavailable.")
-        handler = None
+    # helper to log and mock
+    def use_mock_handler():
+        global handler
+        from onboarding_agent import MockOnboardingConversationHandler
+        print("Using MockOnboardingConversationHandler")
+        handler = MockOnboardingConversationHandler(project_id, location)
 
-    try:
-        menu_generator = MenuGenerator(
-            project_id=project_id,
-            location=location,
-        )
-    except Exception as e:
-        print(f"Failed to initialize real MenuGenerator: {e}. Using Mock.")
+    def use_mock_auth():
+        global auth_service
+        from auth import MockAuthService
+        print("Using MockAuthService")
+        auth_service = MockAuthService()
+
+    # Initialize Handler
+    if mock_mode:
+        use_mock_handler()
+    else:
+        try:
+            handler = OnboardingConversationHandler(
+                project_id=project_id,
+                location=location,
+            )
+        except Exception as e:
+            print(f"Failed to initialize OnboardingConversationHandler: {e}. ")
+            if mock_mode: 
+                 use_mock_handler()
+            else:
+                 print("Onboarding endpoints will be unavailable.")
+                 handler = None
+
+    # Initialize MenuGenerator
+    if mock_mode:
+        print("Using MockMenuGenerator")
         menu_generator = MockMenuGenerator(project_id, location)
+    else:
+        try:
+            menu_generator = MenuGenerator(
+                project_id=project_id,
+                location=location,
+            )
+        except Exception as e:
+            print(f"Failed to initialize real MenuGenerator: {e}. Using Mock.")
+            menu_generator = MockMenuGenerator(project_id, location)
     
-    # Initialize auth service
-    try:
-        from google.cloud import firestore
-        db = firestore.Client(project=project_id)
-        auth_service = AuthService(db)
-        print("AuthService initialized successfully")
-    except Exception as e:
-        print(f"Failed to initialize AuthService: {e}")
-        auth_service = None
+    # Initialize Auth Service
+    if mock_mode:
+        use_mock_auth()
+    else:
+        try:
+            from google.cloud import firestore
+            db = firestore.Client(project=project_id)
+            auth_service = AuthService(db)
+            print("AuthService initialized successfully")
+        except Exception as e:
+            print(f"Failed to initialize AuthService: {e}")
+            if mock_mode:
+                 use_mock_auth()
+            else:
+                 auth_service = None
     
     yield
     

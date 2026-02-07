@@ -176,6 +176,12 @@ def verify_google_token(credential: str) -> dict:
     Returns dict with: sub (Google user ID), email, name, picture
     """
     if not GOOGLE_CLIENT_ID:
+        # Mock behavior if client ID not set but we're in a mock flow?
+        # Ideally, we should not be calling this in mock flow if we mock the auth service.
+        # But for robustness:
+        pass
+        
+    if not GOOGLE_CLIENT_ID:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Google OAuth not configured (missing GOOGLE_CLIENT_ID)"
@@ -394,6 +400,132 @@ class AuthService:
         # Generate token
         access_token = create_access_token(user.user_id, user.email, user.is_onboarded)
         
+        return Token(
+            access_token=access_token,
+            user_id=user.user_id,
+            email=user.email,
+            is_onboarded=user.is_onboarded,
+        )
+
+# =============================================================================
+# Mock Auth Service
+# =============================================================================
+
+class MockAuthService:
+    """
+    In-memory mock authentication service for local testing.
+    """
+    
+    def __init__(self):
+        """Initialize the mock auth service with in-memory storage."""
+        self.users = {}  # {user_id: UserAuth}
+        print("MockAuthService initialized with in-memory storage")
+    
+    def get_user_by_email(self, email: str) -> Optional[UserAuth]:
+        """Get user by email address."""
+        for user in self.users.values():
+            if user.email == email:
+                return user
+        return None
+    
+    def get_user_by_google_id(self, google_id: str) -> Optional[UserAuth]:
+        """Get user by Google ID."""
+        for user in self.users.values():
+            if user.google_id == google_id:
+                return user
+        return None
+    
+    def get_user_by_id(self, user_id: str) -> Optional[UserAuth]:
+        """Get user by user ID."""
+        return self.users.get(user_id)
+    
+    def create_user(self, user: UserAuth) -> UserAuth:
+        """Create a new user."""
+        self.users[user.user_id] = user
+        return user
+    
+    def update_user(self, user: UserAuth) -> UserAuth:
+        """Update an existing user."""
+        self.users[user.user_id] = user
+        return user
+    
+    def set_onboarded(self, user_id: str) -> None:
+        """Mark a user as onboarded."""
+        if user_id in self.users:
+            self.users[user_id].is_onboarded = True
+    
+    def signup_with_email(self, email: str, password: str) -> Token:
+        """Create a new user with email/password."""
+        if self.get_user_by_email(email):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        import uuid
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        
+        user = UserAuth(
+            user_id=user_id,
+            email=email,
+            password_hash=hash_password(password),
+            is_onboarded=False,
+        )
+        
+        self.create_user(user)
+        access_token = create_access_token(user.user_id, user.email, user.is_onboarded)
+        
+        return Token(
+            access_token=access_token,
+            user_id=user.user_id,
+            email=user.email,
+            is_onboarded=user.is_onboarded,
+        )
+    
+    def login_with_email(self, email: str, password: str) -> Token:
+        """Authenticate with email/password."""
+        user = self.get_user_by_email(email)
+        
+        if not user or not user.password_hash:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+            
+        if not verify_password(password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+        
+        access_token = create_access_token(user.user_id, user.email, user.is_onboarded)
+        return Token(
+            access_token=access_token,
+            user_id=user.user_id,
+            email=user.email,
+            is_onboarded=user.is_onboarded,
+        )
+    
+    def auth_with_google(self, credential: str) -> Token:
+        """Mock Google Auth - accepts any non-empty credential as a user."""
+        # Simple mock: treat credential as email if it looks like one, else mock it
+        email = "mockuser@example.com"
+        if "@" in credential:
+            email = credential
+            
+        user = self.get_user_by_email(email)
+        if not user:
+            import uuid
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            user = UserAuth(
+                user_id=user_id,
+                email=email,
+                google_id="mock_google_id",
+                is_onboarded=False
+            )
+            self.create_user(user)
+            
+        access_token = create_access_token(user.user_id, user.email, user.is_onboarded)
         return Token(
             access_token=access_token,
             user_id=user.user_id,
