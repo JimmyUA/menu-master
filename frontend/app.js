@@ -187,7 +187,99 @@ function setLoading(isLoading) {
 }
 
 function showProfileModal(data) {
-    profileResult.textContent = JSON.stringify(data, null, 2);
+    // profileResult.textContent = JSON.stringify(data, null, 2); // OLD
+    const container = document.getElementById('profileDisplay');
+    container.innerHTML = ''; // Clear previous
+
+    // Helper to create card
+    const createCard = (title, icon, content) => {
+        const card = document.createElement('div');
+        card.className = 'profile-card';
+        card.innerHTML = `<h3>${icon} ${title}</h3>${content}`;
+        return card;
+    };
+
+    // 1. Location & Household
+    const loc = data.location || {};
+    const house = data.household || {};
+    const basicContent = `
+        <div class="profile-row">
+            <span class="profile-label">City</span>
+            <span class="profile-value">${loc.city || '-'}</span>
+        </div>
+        <div class="profile-row">
+            <span class="profile-label">Country</span>
+            <span class="profile-value">${loc.country || '-'}</span>
+        </div>
+        <div class="profile-row">
+            <span class="profile-label">Adults</span>
+            <span class="profile-value">${house.adults || 0}</span>
+        </div>
+        <div class="profile-row">
+            <span class="profile-label">Children</span>
+            <span class="profile-value">${house.children || 0}</span>
+        </div>
+    `;
+    container.appendChild(createCard('Basics', '📍', basicContent));
+
+    // 2. Dietary Preferences
+    const diet = data.dietary_preferences || [];
+    const allergies = data.allergies_dislikes || [];
+
+    let dietContent = '<div class="profile-row" style="display:block"><div class="profile-label" style="margin-bottom:0.5rem">Preferences</div><div class="tag-container">';
+    if (diet.length === 0) dietContent += '<span class="profile-label">None</span>';
+    diet.forEach(item => {
+        dietContent += `<span class="profile-tag">${item}</span>`;
+    });
+    dietContent += '</div></div>';
+
+    dietContent += '<div class="profile-row" style="display:block; border:none"><div class="profile-label" style="margin-bottom:0.5rem">Allergies / Dislikes</div><div class="tag-container">';
+    if (allergies.length === 0) dietContent += '<span class="profile-label">None</span>';
+    allergies.forEach(item => {
+        dietContent += `<span class="profile-tag allergy">${item}</span>`;
+    });
+    dietContent += '</div></div>';
+
+    container.appendChild(createCard('Dietary', '🥗', dietContent));
+
+    // 3. Meal Schedule
+    const schedule = data.meal_schedule || {};
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+    let scheduleHtml = `
+        <div class="schedule-grid">
+            <div class="schedule-row schedule-header">
+                <span>Day</span>
+                <span style="text-align:center">B</span>
+                <span style="text-align:center">L</span>
+                <span style="text-align:center">D</span>
+            </div>
+    `;
+
+    const checkIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+    const dashIcon = `<span style="opacity:0.3">•</span>`;
+
+    days.forEach(day => {
+        const dayData = schedule[day] || { breakfast: false, lunch: false, dinner: false };
+        // Handle short day names
+        const shortDay = day.charAt(0).toUpperCase() + day.slice(1, 3);
+
+        scheduleHtml += `
+            <div class="schedule-row">
+                <span class="day-label">${shortDay}</span>
+                <div class="meal-slot ${dayData.breakfast ? 'active' : ''}">${dayData.breakfast ? checkIcon : dashIcon}</div>
+                <div class="meal-slot ${dayData.lunch ? 'active' : ''}">${dayData.lunch ? checkIcon : dashIcon}</div>
+                <div class="meal-slot ${dayData.dinner ? 'active' : ''}">${dayData.dinner ? checkIcon : dashIcon}</div>
+            </div>
+        `;
+    });
+    scheduleHtml += '</div>';
+
+    // Make the schedule card span full width if possible, or just normal
+    const scheduleCard = createCard('Weekly Schedule', '📅', scheduleHtml);
+    scheduleCard.style.gridColumn = '1 / -1'; // Span all columns
+    container.appendChild(scheduleCard);
+
 
     // Add View Menu Button if not already there
     let menuBtn = document.getElementById('viewMenuBtn');
@@ -209,3 +301,55 @@ function showProfileModal(data) {
 
     profileModal.classList.remove('hidden');
 }
+
+// Temporary helper to preview the profile modal
+window.previewProfile = function () {
+    const mockProfile = {
+        "user_id": "test_user_123",
+        "location": {
+            "city": "Milano",
+            "country": "Italy"
+        },
+        "household": {
+            "adults": 2,
+            "children": 2
+        },
+        "dietary_preferences": [
+            "Mediterranean",
+            "Italian"
+        ],
+        "allergies_dislikes": [
+            "wheat",
+            "tomatos"
+        ],
+        "meal_schedule": {
+            "monday": { "breakfast": true, "lunch": true, "dinner": true },
+            "tuesday": { "breakfast": true, "lunch": true, "dinner": true },
+            "wednesday": { "breakfast": true, "lunch": true, "dinner": true },
+            "thursday": { "breakfast": true, "lunch": true, "dinner": true },
+            "friday": { "breakfast": true, "lunch": true, "dinner": true },
+            "saturday": { "breakfast": false, "lunch": false, "dinner": false },
+            "sunday": { "breakfast": false, "lunch": false, "dinner": false }
+        },
+        "created_at": new Date().toISOString()
+    };
+
+    console.log("Showing mock profile...");
+    showProfileModal(mockProfile);
+};
+
+// Add a visible button for easy access during dev
+const btn = document.createElement('button');
+btn.textContent = '👁️ Preview Profile';
+btn.style.position = 'fixed';
+btn.style.bottom = '10px';
+btn.style.right = '10px';
+btn.style.zIndex = '9999';
+btn.style.padding = '0.5rem 1rem';
+btn.style.background = '#8b5cf6';
+btn.style.color = 'white';
+btn.style.border = 'none';
+btn.style.borderRadius = '0.5rem';
+btn.style.cursor = 'pointer';
+btn.onclick = window.previewProfile;
+document.body.appendChild(btn);

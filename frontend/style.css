@@ -666,3 +666,129 @@ pre {
     background: rgba(239, 68, 68, 0.1);
     border-radius: 1rem;
 }
+
+/* =========================================
+   Profile Grid Styles
+   ========================================= */
+
+.profile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    text-align: left;
+}
+
+.profile-card {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.profile-card:hover {
+    background: rgba(30, 41, 59, 0.8);
+    border-color: var(--primary);
+    transform: translateY(-2px);
+}
+
+.profile-card h3 {
+    color: var(--primary);
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.profile-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.8rem;
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.profile-row:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.profile-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.profile-value {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.tag-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.profile-tag {
+    background: rgba(139, 92, 246, 0.1);
+    color: #a78bfa;
+    padding: 0.3rem 0.8rem;
+    border-radius: 2rem;
+    font-size: 0.85rem;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.profile-tag.allergy {
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+/* Schedule Grid */
+.schedule-grid {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.schedule-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 1fr 1fr;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.85rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.schedule-header {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-bottom: 0.5rem;
+}
+
+.day-label {
+    color: var(--text-secondary);
+    text-transform: capitalize;
+}
+
+.meal-slot {
+    text-align: center;
+    color: #334155;
+    /* Inactive color */
+}
+
+.meal-slot.active {
+    color: #4ade80;
+    /* Active color */
+}
+
+.meal-slot svg {
+    width: 16px;
+    height: 16px;
+}
