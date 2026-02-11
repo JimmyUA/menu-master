@@ -778,7 +778,9 @@ pre {
 }
 
 .meal-slot {
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: #334155;
     /* Inactive color */
 }
