@@ -110,6 +110,7 @@ User Profile:
 - Location: {city}, {country}
 - Household Size: {adults} adults, {children} children
 - Dietary Preferences: {dietary_preferences}
+- Cuisine Preferences: {cuisine_preferences}
 - Allergies/Dislikes: {allergies_dislikes}
 
 Cooking Schedule (Only generate meals for these slots):
@@ -205,6 +206,7 @@ class MenuGenerator:
             adults=user_profile.household.adults,
             children=user_profile.household.children,
             dietary_preferences=", ".join(user_profile.dietary_preferences) or "None",
+            cuisine_preferences=", ".join(user_profile.cuisine_preferences) or "None",
             allergies_dislikes=", ".join(user_profile.allergies_dislikes) or "None",
             schedule_description=schedule_desc
         )
@@ -342,6 +344,7 @@ class MenuGenerator:
                 location=LocationData(**user_data.get("location", {})),
                 household=HouseholdInfo(**user_data.get("household", {"adults": 1, "children": 0})),
                 dietary_preferences=user_data.get("dietary_preferences", []),
+                cuisine_preferences=user_data.get("cuisine_preferences", []),
                 allergies_dislikes=user_data.get("allergies_dislikes", []),
                 meal_schedule=WeeklySchedule(**user_data.get("meal_schedule", {})),
             )
@@ -392,6 +395,7 @@ class MenuGenerator:
                     location=LocationData(**user_data["location"]),
                     household=HouseholdInfo(**user_data["household"]),
                     dietary_preferences=user_data.get("dietary_preferences", []),
+                    cuisine_preferences=user_data.get("cuisine_preferences", []),
                     allergies_dislikes=user_data.get("allergies_dislikes", []),
                     meal_schedule=WeeklySchedule(**user_data.get("meal_schedule", {})),
                 )

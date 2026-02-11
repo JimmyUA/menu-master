@@ -64,6 +64,7 @@ class UserProfile(BaseModel):
     location: LocationData
     household: HouseholdInfo
     dietary_preferences: list[str] = Field(default_factory=list)
+    cuisine_preferences: list[str] = Field(default_factory=list, description="Favorite cuisines or specific dishes")
     allergies_dislikes: list[str] = Field(default_factory=list)
     meal_schedule: WeeklySchedule = Field(default_factory=WeeklySchedule)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -81,6 +82,8 @@ class UserProfile(BaseModel):
                 "children": self.household.children,
             },
             "dietary_preferences": self.dietary_preferences,
+            "cuisine_preferences": self.cuisine_preferences,
+            "allergies_dislikes": self.allergies_dislikes,
             "allergies_dislikes": self.allergies_dislikes,
             "meal_schedule": self.meal_schedule.model_dump(),
             "created_at": self.created_at,
@@ -138,15 +141,16 @@ SYSTEM_INSTRUCTION = """You are a friendly, concise culinary assistant helping n
 Your goal is to naturally collect the following information through conversation:
 1. Household size (how many adults and children)
 2. Dietary constraints (allergies, vegetarian, vegan, keto, etc.)
-3. Specific dislikes (ingredients they want to avoid)
-4. Cooking Routine (which specific days and meals they cook at home, e.g., "dinners on weekdays", "only weekends", etc.)
+3. Cuisine preferences (what cuisines or specific dishes they enjoy)
+4. Specific dislikes (ingredients they want to avoid)
+5. Cooking Routine (which specific days and meals they cook at home, e.g., "dinners on weekdays", "only weekends", etc.)
 
 Guidelines:
 - Ask ONE question at a time, keeping it casual and conversational
 - If the user mentions multiple facts at once (e.g., "I have a wife and two kids, we hate onions"), acknowledge all of them and move to the next topic
 - Be encouraging and show genuine interest in their preferences
 - Keep responses brief (1-2 sentences max for each question)
-- Once you have gathered all 4 pieces of information, thank them and say you're all set
+- Once you have gathered all 5 pieces of information, thank them and say you're all set
 
 IMPORTANT: Do NOT make up or assume information the user hasn't provided. Only use what they explicitly tell you."""
 
@@ -173,6 +177,7 @@ Required JSON schema:
         "children": <integer, default 0 if not specified>
     },
     "dietary_preferences": [<list of dietary preferences like "vegetarian", "keto", "Mediterranean", etc.>],
+    "cuisine_preferences": [<list of favorite cuisines or dishes>],
     "allergies_dislikes": [<list of allergies and ingredient dislikes>],
     "meal_schedule": {
         "monday": {"breakfast": <bool>, "lunch": <bool>, "dinner": <bool>},
@@ -626,6 +631,7 @@ class OnboardingConversationHandler:
                 children=extracted_data.get("household", {}).get("children", 0),
             ),
             dietary_preferences=dietary_prefs,
+            cuisine_preferences=extracted_data.get("cuisine_preferences", []),
             allergies_dislikes=extracted_data.get("allergies_dislikes", []),
             meal_schedule=WeeklySchedule(**extracted_data.get("meal_schedule", {})),
         )
@@ -678,6 +684,7 @@ class OnboardingConversationHandler:
             return {
                 "household": {"adults": 1, "children": 0},
                 "dietary_preferences": [],
+                "cuisine_preferences": [],
                 "allergies_dislikes": [],
                 "meal_schedule": {},
             }
@@ -729,6 +736,7 @@ class OnboardingConversationHandler:
                 location=LocationData(**data["location"]),
                 household=HouseholdInfo(**data["household"]),
                 dietary_preferences=data.get("dietary_preferences", []),
+                cuisine_preferences=data.get("cuisine_preferences", []),
                 allergies_dislikes=data.get("allergies_dislikes", []),
                 meal_schedule=WeeklySchedule(**data.get("meal_schedule", {})),
                 created_at=data.get("created_at", datetime.now(timezone.utc)),
@@ -785,8 +793,10 @@ class MockOnboardingConversationHandler:
         if user_msg_count == 1:
             response = "Got it. Do you have any dietary restrictions or allergies?"
         elif user_msg_count == 2:
-            response = "Understood. Is there anything you specifically dislike?"
+            response = "Understood. What kind of cuisines or dishes do you enjoy?"
         elif user_msg_count == 3:
+            response = "Sounds delicious! Is there anything you specifically dislike?"
+        elif user_msg_count == 4:
             response = "Noted. Finally, what's your typical cooking schedule?"
         else:
             response = "That's everything I need! You're all set."
