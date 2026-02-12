@@ -9,6 +9,7 @@ let currentUser = null;
 // Elements
 const weekDateEl = document.getElementById('weekDate');
 const dishGridEl = document.getElementById('dishGrid');
+const daysNavEl = document.getElementById('daysNav');
 const searchInput = document.getElementById('dishSearch');
 const modal = document.getElementById('dishModal');
 const closeModalBtn = document.getElementById('closeModal');
@@ -60,9 +61,6 @@ if (document.readyState === 'loading') {
 
 console.log("Menu.js: Script Loaded (Listeners attached)");
 
-// Make fetchMenu available globally for debugging
-window.fetchMenu = fetchMenu;
-
 // Fetch Menu
 async function fetchMenu(userId) {
     try {
@@ -90,8 +88,15 @@ async function fetchMenu(userId) {
         currentMenu = data.menu;
         weekDateEl.textContent = `Week of ${data.week_start_date}`;
 
-        processMenuData(currentMenu);
-        renderDishes(allDishes);
+        // Set current day to today if possible
+        const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+        if (currentMenu[today]) {
+            currentDay = today;
+        }
+
+        processMenuData(currentMenu); // Populate allDishes for search and modal lookups
+        renderTabs();
+        renderMenuForDay(currentDay);
 
     } catch (error) {
         console.error('Error fetching menu:', error);
@@ -99,7 +104,94 @@ async function fetchMenu(userId) {
     }
 }
 
-// Process Menu into Flat List
+// Render Tabs
+function renderTabs() {
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+    daysNavEl.innerHTML = days.map(day => `
+        <button class="day-tab ${day === currentDay ? 'active' : ''}" onclick="switchDay('${day}')">
+            ${capitalize(day)}
+        </button>
+    `).join('');
+}
+
+// Switch Day
+window.switchDay = (day) => {
+    currentDay = day;
+    renderTabs(); // Re-render to update active state
+    renderMenuForDay(day);
+};
+
+// Render Menu for Specific Day
+function renderMenuForDay(day) {
+    const dailyMenu = currentMenu[day];
+
+    if (!dailyMenu) {
+        dishGridEl.innerHTML = '<div class="empty-state"><p>No menu planned for this day.</p></div>';
+        return;
+    }
+
+    // Define meal order
+    const mealOrder = ['breakfast', 'lunch', 'dinner'];
+    const mealIcons = {
+        'breakfast': '🍳',
+        'lunch': '🥗',
+        'dinner': '🍽️'
+    };
+
+    let html = '';
+
+    mealOrder.forEach(mealType => {
+        const dish = dailyMenu[mealType];
+        if (dish) {
+            // Reconstruct dish object for modal
+            // We need to ensure it's in allDishes or accessible for the modal
+            // For simplicity, let's just make it globally accessible via a lookup
+            // Or just pass the data directly if we refactor openDishModal (skip for now to minimize changes)
+
+            // NOTE: We need to populate allDishes or similar for the modal to work if we use the old logic
+            // Let's populate a temporary list for the current day to make search work if needed, 
+            // but for now let's just render the view.
+
+            // Let's make sure our dish lookup works.
+            // We'll update the global allDishes with the CURRENT day's dishes for now, 
+            // OR we can just keep allDishes populated with everything for search, 
+            // and just filter display for the tab.
+
+            // Let's populate allDishes with everything once (like before) so search works globally?
+            // If we do that, we need to handle the "Search" view vs "Tab" view.
+            // Simple approach: Search overrides tabs.
+
+            html += `
+                <div class="meal-section">
+                    <div class="meal-title">
+                        <span class="meal-icon">${mealIcons[mealType]}</span>
+                        ${capitalize(mealType)}
+                    </div>
+                <div class="dish-grid" style="padding-bottom: 0;">
+                        <div class="dish-card" onclick="openDishModal('${day}', '${mealType}')">
+                            <h3>${dish.name}</h3>
+                            <p>${dish.description}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    });
+
+    if (html === '') {
+        html = '<div class="empty-state"><p>No meals scheduled for this day.</p></div>';
+    }
+
+    dishGridEl.innerHTML = html;
+
+    // Also update allDishes so the modal works!
+    // We need to make sure the modal can find the dish.
+    // Let's run processMenuData(currentMenu) once after fetching to populate allDishes for the modal lookups.
+
+}
+
+// Process Menu to populate allDishes for Lookups/Search
 function processMenuData(menu) {
     allDishes = [];
     const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -121,42 +213,52 @@ function processMenuData(menu) {
     });
 }
 
-// Render Grid
-function renderDishes(dishes) {
+// Search Handler
+searchInput.addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase();
+
+    if (term === '') {
+        // Restore tab view when search is cleared
+        daysNavEl.style.display = 'flex';
+        renderMenuForDay(currentDay);
+        return;
+    }
+
+    // Hide tabs when searching
+    daysNavEl.style.display = 'none';
+
+    const filtered = allDishes.filter(dish => {
+        return (
+            dish.name.toLowerCase().includes(term) ||
+            dish.description.toLowerCase().includes(term)
+        );
+    });
+
+    renderDishesFlat(filtered);
+});
+
+// Helper to render a flat list of dishes (used for search results)
+function renderDishesFlat(dishes) {
     if (dishes.length === 0) {
         dishGridEl.innerHTML = '<div class="empty-msg">No dishes found matching your search.</div>';
         return;
     }
 
-    dishGridEl.innerHTML = dishes.map(dish => `
-        <div class="dish-card" onclick="openDishModal('${dish.day}', '${dish.type}')">
-            <div class="dish-header">
-                <span class="dish-day">${capitalize(dish.day)}</span>
-                <span class="dish-type">${capitalize(dish.type)}</span>
-            </div>
-            <h3>${dish.name}</h3>
-            <p>${dish.description}</p>
-            <div class="dish-tags">
-                <span>${dish.ingredients.length} ingredients</span>
-            </div>
+    dishGridEl.innerHTML = `
+        <div class="dish-grid">
+            ${dishes.map(dish => `
+                <div class="dish-card" onclick="openDishModal('${dish.day}', '${dish.type}')">
+                    <div class="dish-header">
+                        <span class="dish-day">${capitalize(dish.day)}</span>
+                        <span class="dish-type">${capitalize(dish.type)}</span>
+                    </div>
+                    <h3>${dish.name}</h3>
+                    <p>${dish.description}</p>
+                </div>
+            `).join('')}
         </div>
-    `).join('');
+    `;
 }
-
-// Search Handler
-searchInput.addEventListener('input', (e) => {
-    const term = e.target.value.toLowerCase();
-
-    const filtered = allDishes.filter(dish => {
-        return (
-            dish.name.toLowerCase().includes(term) ||
-            dish.description.toLowerCase().includes(term) ||
-            dish.ingredients.some(ing => ing.toLowerCase().includes(term))
-        );
-    });
-
-    renderDishes(filtered);
-});
 
 // Modal Logic
 window.openDishModal = (day, type) => {
