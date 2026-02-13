@@ -1,0 +1,56 @@
+﻿
+    def _fetch_user_ratings(self, user_id: str) -> str:
+        '''Fetch and format user's historical dish ratings.'''
+        try:
+            ratings_query = self.db.collection('dish_ratings').where('user_id', '==', user_id).stream()
+            
+            liked_dishes = []
+            disliked_dishes = []
+            
+            for doc in ratings_query:
+                data = doc.to_dict()
+                dish_name = data.get('dish_name', '')
+                rating = data.get('rating', '')
+                
+                if rating == 'thumbs_up':
+                    liked_dishes.append(dish_name)
+                elif rating == 'thumbs_down':
+                    disliked_dishes.append(dish_name)
+            
+            if not liked_dishes and not disliked_dishes:
+                return 'No previous ratings yet. This is a fresh start!'
+            
+            parts = []
+            if liked_dishes:
+                parts.append(f'**Liked Dishes** (prioritize similar): {', '.join(liked_dishes[:10])}')
+            if disliked_dishes:
+                parts.append(f'**Disliked Dishes** (avoid similar): {', '.join(disliked_dishes[:10])}')
+            
+            return '\n'.join(parts)
+            
+        except Exception as e:
+            logger.error(f'Error fetching ratings for user {user_id}: {e}')
+            return 'No rating data available.'
+
+    def _format_learned_preferences(self, learned_prefs: dict) -> str:
+        '''Format learned preferences into a readable string.'''
+        if not learned_prefs:
+            return 'No learned preferences yet.'
+        
+        sections = []
+        
+        category_labels = {
+            'flavor_preferences': 'Flavor Preferences',
+            'texture_preferences': 'Texture Preferences',
+            'ingredient_preferences': 'Ingredient Preferences',
+            'cooking_methods': 'Cooking Methods',
+            'nutritional_preferences': 'Nutritional Preferences'
+        }
+        
+        for category, prefs in learned_prefs.items():
+            if prefs and len(prefs) > 0:
+                label = category_labels.get(category, category.replace('_', ' ').title())
+                sections.append(f'**{label}**: {', '.join(prefs[:5])}')
+        
+        return '\n'.join(sections) if sections else 'No learned preferences yet.'
+

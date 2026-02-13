@@ -917,3 +917,226 @@ pre {
     width: 16px;
     height: 16px;
 }
+/* =========================================
+   Rating UI Styles
+   ========================================= */
+
+/* Rating Buttons Container */
+.rating-buttons {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    align-items: center;
+}
+
+.rating-buttons button {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 50px;
+}
+
+.rating-buttons button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--primary);
+    transform: scale(1.1);
+}
+
+.rating-buttons button.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+}
+
+/* Modal Rating Buttons */
+.modal-rating-buttons {
+    margin: 1rem 0 1.5rem 0;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Feedback Input Container */
+.feedback-input-container {
+    margin-top: 1rem;
+    animation: slideDown 0.3s ease;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.feedback-input-container.closing {
+    animation: slideUp 0.3s ease;
+    opacity: 0;
+}
+
+.feedback-textarea {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+    min-height: 60px;
+    transition: all 0.2s;
+}
+
+.feedback-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.feedback-textarea::placeholder {
+    color: var(--text-secondary);
+}
+
+/* Feedback Actions */
+.feedback-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.feedback-submit,
+.feedback-skip {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.feedback-submit {
+    background: var(--primary);
+    color: white;
+    flex: 1;
+}
+
+.feedback-submit:hover:not(:disabled) {
+    background: var(--primary-hover);
+}
+
+.feedback-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.feedback-skip {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+}
+
+.feedback-skip:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+/* Success Toast */
+.success-toast {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.9), rgba(21, 128, 61, 0.9));
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    opacity: 0;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    max-width: 90%;
+    transition: all 0.3s ease;
+}
+
+.success-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.success-toast strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 1rem;
+}
+
+/* Animations */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        max-height: 200px;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+        max-height: 200px;
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-10px);
+        max-height: 0;
+    }
+}
+
+/* Loading Spinner (for feedback analysis) */
+.feedback-submit:disabled::after {
+    content: '';
+    width: 12px;
+    height: 12px;
+    margin-left: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .rating-buttons button {
+        padding: 0.4rem 0.8rem;
+        font-size: 1rem;
+        min-width: 45px;
+    }
+    
+    .feedback-input-container {
+        padding: 0.75rem;
+    }
+    
+    .success-toast {
+        bottom: 1rem;
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+    }
+}

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Menu Generator Service
 
 Generates weekly meal plans for users based on their profiles and preferences
@@ -113,6 +113,12 @@ User Profile:
 - Cuisine Preferences: {cuisine_preferences}
 - Allergies/Dislikes: {allergies_dislikes}
 
+Learned Preferences from Feedback:
+{learned_preferences}
+
+Historical Ratings:
+{historical_ratings}
+
 Cooking Schedule (Only generate meals for these slots):
 {schedule_description}
 
@@ -126,6 +132,12 @@ Instructions:
     - Set "preparation_steps" to []
 4. For valid meals, provide full details including step-by-step preparation instructions.
 5. Use local ingredients available in {city}, {country} where possible.
+6. **CRITICAL**: Pay close attention to the user's learned preferences and historical ratings. 
+   - Prioritize dishes similar to those rated positively (thumbs up)
+   - Avoid dishes similar to those rated negatively (thumbs down)
+   - Apply the learned preferences (flavor, texture, ingredients, cooking methods, nutritional)
+   - Generate creative variations of liked dishes while maintaining the core elements they enjoyed
+7. Ensure variety while respecting the user's demonstrated preferences.
 
 Return the result as a JSON object adhering to the schema provided.
 """
@@ -200,6 +212,12 @@ class MenuGenerator:
 
         schedule_desc = self._format_schedule_description(user_profile.meal_schedule)
         
+        # Fetch user ratings from Firestore
+        historical_ratings = self._fetch_user_ratings(user_profile.user_id)
+        
+        # Format learned preferences
+        learned_prefs = self._format_learned_preferences(user_profile.learned_preferences)
+        
         prompt = MENU_GENERATION_PROMPT.format(
             city=user_profile.location.city,
             country=user_profile.location.country,
@@ -208,6 +226,8 @@ class MenuGenerator:
             dietary_preferences=", ".join(user_profile.dietary_preferences) or "None",
             cuisine_preferences=", ".join(user_profile.cuisine_preferences) or "None",
             allergies_dislikes=", ".join(user_profile.allergies_dislikes) or "None",
+            learned_preferences=learned_prefs,
+            historical_ratings=historical_ratings,
             schedule_description=schedule_desc
         )
 
@@ -272,6 +292,63 @@ class MenuGenerator:
                 lines.append(f"- {day.capitalize()}: No meals cooked at home")
                 
         return "\n".join(lines)
+
+    def _fetch_user_ratings(self, user_id: str) -> str:
+        '''Fetch and format user's historical dish ratings.'''
+        try:
+            ratings_query = self.db.collection('dish_ratings').where('user_id', '==', user_id).stream()
+            
+            liked_dishes = []
+            disliked_dishes = []
+            
+            for doc in ratings_query:
+                data = doc.to_dict()
+                dish_name = data.get('dish_name', '')
+                rating = data.get('rating', '')
+                
+                if rating == 'thumbs_up':
+                    liked_dishes.append(dish_name)
+                elif rating == 'thumbs_down':
+                    disliked_dishes.append(dish_name)
+            
+            if not liked_dishes and not disliked_dishes:
+                return 'No previous ratings yet. This is a fresh start!'
+            
+            parts = []
+            if liked_dishes:
+                parts.append(f'**Liked Dishes** (prioritize similar): {', '.join(liked_dishes[:10])}')
+            if disliked_dishes:
+                parts.append(f'**Disliked Dishes** (avoid similar): {', '.join(disliked_dishes[:10])}')
+            
+            return '\n'.join(parts)
+            
+        except Exception as e:
+            logger.error(f'Error fetching ratings for user {user_id}: {e}')
+            return 'No rating data available.'
+
+    def _format_learned_preferences(self, learned_prefs: dict) -> str:
+        '''Format learned preferences into a readable string.'''
+        if not learned_prefs:
+            return 'No learned preferences yet.'
+        
+        sections = []
+        
+        category_labels = {
+            'flavor_preferences': 'Flavor Preferences',
+            'texture_preferences': 'Texture Preferences',
+            'ingredient_preferences': 'Ingredient Preferences',
+            'cooking_methods': 'Cooking Methods',
+            'nutritional_preferences': 'Nutritional Preferences'
+        }
+        
+        for category, prefs in learned_prefs.items():
+            if prefs and len(prefs) > 0:
+                label = category_labels.get(category, category.replace('_', ' ').title())
+                sections.append(f'**{label}**: {', '.join(prefs[:5])}')
+        
+        return '\n'.join(sections) if sections else 'No learned preferences yet.'
+
+
 
     def save_menu(self, user_id: str, week_start_date: str, menu: WeeklyMenu) -> None:
         """Save the generated menu to Firestore."""
@@ -414,3 +491,4 @@ class MenuGenerator:
                 continue
 
         logger.info(f"Job completed. Success: {success_count}, Errors: {error_count}")
+

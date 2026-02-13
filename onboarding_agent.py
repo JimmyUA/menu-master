@@ -67,6 +67,10 @@ class UserProfile(BaseModel):
     cuisine_preferences: list[str] = Field(default_factory=list, description="Favorite cuisines or specific dishes")
     allergies_dislikes: list[str] = Field(default_factory=list)
     meal_schedule: WeeklySchedule = Field(default_factory=WeeklySchedule)
+    learned_preferences: dict = Field(
+        default_factory=dict,
+        description="Preferences learned from dish feedback analysis"
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_firestore_dict(self) -> dict:
@@ -84,8 +88,8 @@ class UserProfile(BaseModel):
             "dietary_preferences": self.dietary_preferences,
             "cuisine_preferences": self.cuisine_preferences,
             "allergies_dislikes": self.allergies_dislikes,
-            "allergies_dislikes": self.allergies_dislikes,
             "meal_schedule": self.meal_schedule.model_dump(),
+            "learned_preferences": self.learned_preferences,
             "created_at": self.created_at,
         }
 
@@ -781,6 +785,7 @@ class OnboardingConversationHandler:
                 cuisine_preferences=data.get("cuisine_preferences", []),
                 allergies_dislikes=data.get("allergies_dislikes", []),
                 meal_schedule=WeeklySchedule(**data.get("meal_schedule", {})),
+                learned_preferences=data.get("learned_preferences", {}),
                 created_at=data.get("created_at", datetime.now(timezone.utc)),
             )
         except Exception as e:

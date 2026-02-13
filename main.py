@@ -7,6 +7,7 @@ Designed for deployment on Cloud Run.
 
 import os
 import json
+import logging
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -37,6 +38,9 @@ try:
 except ImportError:
     MenuGenerator = None
     print("Warning: Failed to import MenuGenerator (missing dependencies?)")
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Mock Generator (Fallback)
@@ -135,6 +139,29 @@ class HealthResponse(BaseModel):
     version: str = "1.0.0"
 
 
+class DishRatingRequest(BaseModel):
+    """Request to rate a dish with optional feedback."""
+    user_id: str
+    dish_name: str
+    rating: str = Field(..., description="Rating type: 'thumbs_up' or 'thumbs_down'")
+    feedback_text: Optional[str] = Field(None, description="Optional user feedback about the dish")
+
+
+class DishRatingResponse(BaseModel):
+    """Response after submitting a dish rating."""
+    success: bool
+    rating: str
+    dish_name: str
+    extracted_preferences: Optional[dict] = None
+    message: str = "Rating saved successfully"
+
+
+class GetRatingsResponse(BaseModel):
+    """Response containing user's dish ratings."""
+    ratings: list[dict]
+    total_count: int
+
+
 # =============================================================================
 # Application Setup
 # =============================================================================
@@ -143,6 +170,140 @@ class HealthResponse(BaseModel):
 handler: Optional[OnboardingConversationHandler] = None
 menu_generator: Optional[MenuGenerator] = None
 auth_service: Optional[AuthService] = None
+
+
+# =============================================================================
+# Feedback Analysis Service
+# =============================================================================
+
+FEEDBACK_ANALYSIS_PROMPT = """Analyze this dish rating feedback and extract structured preferences.
+
+Dish Name: {dish_name}
+Rating: {rating}
+User Feedback: {feedback_text}
+
+Extract specific preferences from the feedback and categorize them into:
+1. flavor_preferences: taste-related preferences (e.g., "prefers less spicy", "loves garlic", "not sweet enough")
+2. texture_preferences: texture-related feedback (e.g., "likes crispy", "too mushy", "perfect tenderness")
+3. ingredient_preferences: ingredient-specific feedback (e.g., "wants more protein", "too much onion", "loves fresh herbs")
+4. cooking_methods: cooking technique preferences (e.g., "prefers grilled", "not a fan of frying", "enjoys roasted")
+5. nutritional_preferences: dietary/health preferences (e.g., "wants lighter meals", "needs more vegetables", "too heavy")
+
+Return ONLY a JSON object with these categories as keys and lists of extracted preferences as values.
+Only include categories that have relevant feedback. Use clear, actionable preference statements.
+
+Example output format:
+{
+  "flavor_preferences": ["prefers milder spices", "loves garlic flavor"],
+  "texture_preferences": ["enjoys crispy textures"],
+  "ingredient_preferences": ["wants more vegetables"]
+}
+
+If the feedback is too short or vague (e.g., just "good" or "bad"), return an empty object: {}
+"""
+
+
+async def analyze_dish_feedback(
+    dish_name: str,
+    rating: str,
+    feedback_text: Optional[str],
+    model: Optional["GenerativeModel"] = None
+) -> dict:
+    """
+    Analyze user feedback using Gemini to extract structured preferences.
+    
+    Args:
+        dish_name: Name of the dish
+        rating: Rating type ('thumbs_up' or 'thumbs_down')
+        feedback_text: User's feedback text
+        model: Gemini model instance (optional, will use global if not provided)
+        
+    Returns:
+        Dictionary of extracted preferences by category
+    """
+    if not feedback_text or len(feedback_text.strip()) < 5:
+        return {}
+    
+    try:
+        # Use handler's model if available
+        if handler and hasattr(handler, 'model'):
+            gemini_model = handler.model
+        elif model:
+            gemini_model = model
+        else:
+            # No model available (mock mode or error)
+            logger.warning("No Gemini model available for feedback analysis")
+            return {}
+        
+        prompt = FEEDBACK_ANALYSIS_PROMPT.format(
+            dish_name=dish_name,
+            rating=rating,
+            feedback_text=feedback_text
+        )
+        
+        from vertexai.generative_models import GenerationConfig
+        response = gemini_model.generate_content(
+            prompt,
+            generation_config=GenerationConfig(
+                temperature=0.1,  # Low temperature for consistent extraction
+                max_output_tokens=512,
+                response_mime_type="application/json",
+            ),
+        )
+        
+        import json
+        extracted = json.loads(response.text)
+        logger.info(f"Extracted preferences from feedback: {extracted}")
+        return extracted
+        
+    except Exception as e:
+        logger.error(f"Error analyzing feedback: {e}")
+        return {}
+
+
+async def merge_preferences_to_profile(user_id: str, extracted_preferences: dict) -> bool:
+    """
+    Merge extracted preferences into user's profile.
+    
+    Args:
+        user_id: User's ID
+        extracted_preferences: Dictionary of preferences extracted from feedback
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if not handler or not extracted_preferences:
+        return False
+    
+    try:
+        # Get current profile
+        profile = await handler.get_user_profile(user_id)
+        if not profile:
+            logger.warning(f"Profile not found for user {user_id}")
+            return False
+        
+        # Merge preferences - append new ones to existing lists
+        current_prefs = profile.learned_preferences
+        
+        for category, new_prefs in extracted_preferences.items():
+            if category not in current_prefs:
+                current_prefs[category] = []
+            
+            # Add new preferences, avoiding duplicates
+            for pref in new_prefs:
+                if pref not in current_prefs[category]:
+                    current_prefs[category].append(pref)
+        
+        # Update profile in Firestore
+        doc_ref = handler.db.collection(handler.firestore_collection).document(user_id)
+        doc_ref.update({"learned_preferences": current_prefs})
+        
+        logger.info(f"Updated preferences for user {user_id}: {current_prefs}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error merging preferences for user {user_id}: {e}")
+        return False
 
 
 @asynccontextmanager
@@ -527,6 +688,158 @@ async def get_latest_menu(user_id: str):
         )
     
     return menu.to_firestore_dict()
+
+
+# =============================================================================
+# Rating Endpoints
+# =============================================================================
+
+@app.post("/ratings/", response_model=DishRatingResponse)
+async def submit_dish_rating(request: DishRatingRequest):
+    """
+    Submit or update a dish rating with optional feedback.
+    
+    If feedback is provided, it will be analyzed by Gemini to extract
+    preferences which are merged into the user's profile.
+    """
+    if not handler:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service not initialized"
+        )
+    
+    try:
+        # Normalize dish name for consistent storage
+        dish_name_normalized = request.dish_name.lower().replace(" ", "_")
+        doc_id = f"{request.user_id}_{dish_name_normalized}"
+        
+        # Get Firestore client
+        db = handler.db
+        
+        # Analyze feedback if provided
+        extracted_preferences = {}
+        if request.feedback_text and request.feedback_text.strip():
+            extracted_preferences = await analyze_dish_feedback(
+                dish_name=request.dish_name,
+                rating=request.rating,
+                feedback_text=request.feedback_text
+            )
+            
+            # Merge preferences to user profile
+            if extracted_preferences:
+                await merge_preferences_to_profile(request.user_id, extracted_preferences)
+        
+        # Save rating to Firestore
+        rating_data = {
+            "user_id": request.user_id,
+            "dish_name": request.dish_name,
+            "rating": request.rating,
+            "feedback_text": request.feedback_text or "",
+            "extracted_preferences": extracted_preferences,
+            "updated_at": datetime.utcnow(),
+        }
+        
+        # Check if rating exists to set created_at
+        doc_ref = db.collection("dish_ratings").document(doc_id)
+        existing_doc = doc_ref.get()
+        
+        if not existing_doc.exists:
+            rating_data["created_at"] = datetime.utcnow()
+        
+        doc_ref.set(rating_data, merge=True)
+        
+        logger.info(f"Saved rating for user {request.user_id}: {request.dish_name} = {request.rating}")
+        
+        return DishRatingResponse(
+            success=True,
+            rating=request.rating,
+            dish_name=request.dish_name,
+            extracted_preferences=extracted_preferences if extracted_preferences else None,
+            message="Rating saved successfully" + (
+                f" and preferences learned!" if extracted_preferences else ""
+            )
+        )
+        
+    except Exception as e:
+        logger.error(f"Error saving rating: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save rating: {str(e)}"
+        )
+
+
+@app.get("/ratings/{user_id}", response_model=GetRatingsResponse)
+async def get_user_ratings(user_id: str):
+    """
+    Get all dish ratings for a user.
+    """
+    if not handler:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service not initialized"
+        )
+    
+    try:
+        db = handler.db
+        
+        # Query all ratings for this user
+        ratings_query = db.collection("dish_ratings").where("user_id", "==", user_id).stream()
+        
+        ratings = []
+        for doc in ratings_query:
+            rating_data = doc.to_dict()
+            ratings.append(rating_data)
+        
+        return GetRatingsResponse(
+            ratings=ratings,
+            total_count=len(ratings)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error retrieving ratings for user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve ratings: {str(e)}"
+        )
+
+
+@app.get("/ratings/{user_id}/{dish_name}")
+async def get_specific_dish_rating(user_id: str, dish_name: str):
+    """
+    Get rating for a specific dish.
+    """
+    if not handler:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service not initialized"
+        )
+    
+    try:
+        db = handler.db
+        
+        # Normalize dish name
+        dish_name_normalized = dish_name.lower().replace(" ", "_")
+        doc_id = f"{user_id}_{dish_name_normalized}"
+        
+        doc_ref = db.collection("dish_ratings").document(doc_id)
+        doc = doc_ref.get()
+        
+        if not doc.exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Rating not found for this dish"
+            )
+        
+        return doc.to_dict()
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving rating: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve rating: {str(e)}"
+        )
 
 
 @app.get("/users/{user_id}", response_model=dict)

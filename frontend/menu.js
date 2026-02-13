@@ -5,6 +5,8 @@
 let currentMenu = null;
 let allDishes = [];
 let currentUser = null;
+let userRatings = {}; // Store user's dish ratings { dish_name: { rating: 'thumbs_up', feedback_text: '...', extracted_preferences: {} } }
+let currentDay = 'monday'; // Track current selected day
 
 // Elements
 const weekDateEl = document.getElementById('weekDate');
@@ -87,6 +89,9 @@ async function fetchMenu(userId) {
         currentMenu = data.menu;
         weekDateEl.textContent = `Week of ${data.week_start_date}`;
 
+        // Load user ratings
+        await loadUserRatings(userId);
+
         // Set current day to today if possible
         const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
         if (currentMenu[today]) {
@@ -143,23 +148,9 @@ function renderMenuForDay(day) {
     mealOrder.forEach(mealType => {
         const dish = dailyMenu[mealType];
         if (dish) {
-            // Reconstruct dish object for modal
-            // We need to ensure it's in allDishes or accessible for the modal
-            // For simplicity, let's just make it globally accessible via a lookup
-            // Or just pass the data directly if we refactor openDishModal (skip for now to minimize changes)
-
-            // NOTE: We need to populate allDishes or similar for the modal to work if we use the old logic
-            // Let's populate a temporary list for the current day to make search work if needed, 
-            // but for now let's just render the view.
-
-            // Let's make sure our dish lookup works.
-            // We'll update the global allDishes with the CURRENT day's dishes for now, 
-            // OR we can just keep allDishes populated with everything for search, 
-            // and just filter display for the tab.
-
-            // Let's populate allDishes with everything once (like before) so search works globally?
-            // If we do that, we need to handle the "Search" view vs "Tab" view.
-            // Simple approach: Search overrides tabs.
+            const existingRating = getRatingForDish(dish.name);
+            const thumbsUpActive = existingRating?.rating === 'thumbs_up' ? 'active' : '';
+            const thumbsDownActive = existingRating?.rating === 'thumbs_down' ? 'active' : '';
 
             html += `
                 <div class="meal-section">
@@ -167,10 +158,22 @@ function renderMenuForDay(day) {
                         <span class="meal-icon">${mealIcons[mealType]}</span>
                         ${capitalize(mealType)}
                     </div>
-                <div class="dish-grid" style="padding-bottom: 0;">
+                    <div class="dish-grid" style="padding-bottom: 0;">
                         <div class="dish-card" onclick="openDishModal('${day}', '${mealType}')">
                             <h3>${dish.name}</h3>
                             <p>${dish.description}</p>
+                            <div class="rating-buttons" data-dish-name="${dish.name}" onclick="event.stopPropagation()">
+                                <button class="thumbs-up ${thumbsUpActive}" 
+                                        onclick="handleRating('${dish.name}', 'thumbs_up')" 
+                                        title="I liked this">
+                                    👍
+                                </button>
+                                <button class="thumbs-down ${thumbsDownActive}" 
+                                        onclick="handleRating('${dish.name}', 'thumbs_down')" 
+                                        title="Not for me">
+                                    👎
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -183,11 +186,6 @@ function renderMenuForDay(day) {
     }
 
     dishGridEl.innerHTML = html;
-
-    // Also update allDishes so the modal works!
-    // We need to make sure the modal can find the dish.
-    // Let's run processMenuData(currentMenu) once after fetching to populate allDishes for the modal lookups.
-
 }
 
 // Process Menu to populate allDishes for Lookups/Search
@@ -258,3 +256,227 @@ function renderEmptyState() {
     `;
     weekDateEl.textContent = "";
 }
+
+// =============================================================================
+// Rating Functions
+// =============================================================================
+
+async function loadUserRatings(userId) {
+    try {
+        const token = window.authUtils.getToken();
+        const response = await fetch(`${API_BASE}/ratings/${userId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            // Convert array to object keyed by dish_name for easy lookup
+            userRatings = {};
+            data.ratings.forEach(rating => {
+                userRatings[rating.dish_name] = rating;
+            });
+            console.log('Loaded user ratings:', userRatings);
+        }
+    } catch (error) {
+        console.error('Error loading ratings:', error);
+    }
+}
+
+async function rateDish(dishName, rating, feedbackText = '') {
+    try {
+        const token = window.authUtils.getToken();
+        const response = await fetch(`${API_BASE}/ratings/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                user_id: currentUser.user_id,
+                dish_name: dishName,
+                rating: rating,
+                feedback_text: feedbackText
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to submit rating');
+        }
+
+        const data = await response.json();
+
+        // Update local ratings
+        userRatings[dishName] = {
+            dish_name: dishName,
+            rating: rating,
+            feedback_text: feedbackText,
+            extracted_preferences: data.extracted_preferences || {}
+        };
+
+        // Update UI
+        updateRatingUI(dishName, rating, data.extracted_preferences);
+
+        // Show success message if preferences were extracted
+        if (data.extracted_preferences && Object.keys(data.extracted_preferences).length > 0) {
+            showSuccessToast(data.extracted_preferences);
+        }
+
+        return data;
+    } catch (error) {
+        console.error('Error submitting rating:', error);
+        alert('Failed to save rating. Please try again.');
+    }
+}
+
+function updateRatingUI(dishName, rating, extractedPrefs) {
+    // Update all rating buttons for this dish (both in card and modal)
+    const ratingContainers = document.querySelectorAll(`[data-dish-name="${dishName}"]`);
+
+    ratingContainers.forEach(container => {
+        const thumbsUpBtn = container.querySelector('.thumbs-up');
+        const thumbsDownBtn = container.querySelector('.thumbs-down');
+
+        if (thumbsUpBtn && thumbsDownBtn) {
+            thumbsUpBtn.classList.remove('active');
+            thumbsDownBtn.classList.remove('active');
+
+            if (rating === 'thumbs_up') {
+                thumbsUpBtn.classList.add('active');
+            } else if (rating === 'thumbs_down') {
+                thumbsDownBtn.classList.add('active');
+            }
+        }
+    });
+}
+
+function getRatingForDish(dishName) {
+    return userRatings[dishName] || null;
+}
+
+function showSuccessToast(preferences) {
+    // Extract a summary of learned preferences
+    const prefSummary = [];
+    for (const [category, prefs] of Object.entries(preferences)) {
+        if (prefs && prefs.length > 0) {
+            prefSummary.push(prefs[0]); // Show first preference from each category
+        }
+    }
+
+    if (prefSummary.length === 0) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'success-toast';
+    toast.innerHTML = `
+        <strong>Thanks!</strong> We learned: ${prefSummary.join(', ')}
+    `;
+    document.body.appendChild(toast);
+
+    // Animate in
+    setTimeout(() => toast.classList.add('show'), 100);
+
+    // Remove after 4 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+function createRatingButtons(dishName) {
+    const existingRating = getRatingForDish(dishName);
+
+    const container = document.createElement('div');
+    container.className = 'rating-buttons';
+    container.setAttribute('data-dish-name', dishName);
+
+    container.innerHTML = `
+        <button class="thumbs-up ${existingRating?.rating === 'thumbs_up' ? 'active' : ''}" 
+                onclick="handleRating('${dishName}', 'thumbs_up')" 
+                title="I liked this">
+            👍
+        </button>
+        <button class="thumbs-down ${existingRating?.rating === 'thumbs_down' ? 'active' : ''}" 
+                onclick="handleRating('${dishName}', 'thumbs_down')" 
+                title="Not for me">
+            👎
+        </button>
+    `;
+
+    return container;
+}
+
+window.handleRating = async function (dishName, rating) {
+    // Submit rating immediately
+    await rateDish(dishName, rating);
+
+    // Show feedback input (optional)
+    showFeedbackInput(dishName, rating);
+};
+
+function showFeedbackInput(dishName, rating) {
+    const container = document.querySelector(`[data-dish-name="${dishName}"]`);
+    if (!container) return;
+
+    // Check if feedback input already exists
+    if (container.querySelector('.feedback-input-container')) {
+        return;
+    }
+
+    const feedbackContainer = document.createElement('div');
+    feedbackContainer.className = 'feedback-input-container';
+    feedbackContainer.innerHTML = `
+        <textarea class="feedback-textarea" 
+                  placeholder="What did you think? (optional)" 
+                  rows="2"></textarea>
+        <div class="feedback-actions">
+            <button class="feedback-submit" onclick="submitFeedback('${dishName}', '${rating}')">Submit</button>
+            <button class="feedback-skip" onclick="closeFeedbackInput('${dishName}')">Skip</button>
+        </div>
+    `;
+
+    container.appendChild(feedbackContainer);
+
+    // Focus textarea
+    const textarea = feedbackContainer.querySelector('.feedback-textarea');
+    textarea.focus();
+
+    // Auto-close after 10 seconds if no input
+    setTimeout(() => {
+        if (textarea.value.trim() === '') {
+            closeFeedbackInput(dishName);
+        }
+    }, 10000);
+}
+
+window.submitFeedback = async function (dishName, rating) {
+    const container = document.querySelector(`[data-dish-name="${dishName}"]`);
+    const textarea = container.querySelector('.feedback-textarea');
+    const feedbackText = textarea.value.trim();
+
+    if (!feedbackText) {
+        closeFeedbackInput(dishName);
+        return;
+    }
+
+    // Show loading state
+    const submitBtn = container.querySelector('.feedback-submit');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Analyzing...';
+    submitBtn.disabled = true;
+
+    // Submit with feedback
+    await rateDish(dishName, rating, feedbackText);
+
+    // Close feedback input
+    closeFeedbackInput(dishName);
+};
+
+window.closeFeedbackInput = function (dishName) {
+    const container = document.querySelector(`[data-dish-name="${dishName}"]`);
+    const feedbackContainer = container?.querySelector('.feedback-input-container');
+    if (feedbackContainer) {
+        feedbackContainer.classList.add('closing');
+        setTimeout(() => feedbackContainer.remove(), 300);
+    }
+};
