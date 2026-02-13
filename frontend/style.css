@@ -180,16 +180,47 @@ button:disabled {
 
 .modal {
     background: var(--chat-bg);
-    padding: 2rem;
+    padding: 0;
     border-radius: 1rem;
-    width: 90%;
+    width: 95%;
     max-width: 400px;
+    max-height: 90vh;
     border: 1px solid var(--border-color);
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .modal.large {
-    max-width: 600px;
+    max-width: 700px;
+}
+
+.modal-body {
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 2rem 2rem 2rem;
+    flex: 1;
+    scroll-behavior: smooth;
+}
+
+/* Smooth scrollbar styling for modal */
+.modal-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-hover);
 }
 
 .modal h2 {
@@ -416,29 +447,45 @@ pre {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 1.5rem;
+    margin-bottom: 0;
     border-bottom: 1px solid var(--border-color);
-    padding-bottom: 1rem;
+    padding: 1.5rem 2rem 1rem 2rem;
+    background: var(--chat-bg);
+    border-radius: 1rem 1rem 0 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .dish-modal h2 {
     font-size: 1.8rem;
     color: var(--primary);
     margin: 0;
+    padding-right: 1rem;
 }
 
 .close-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    font-size: 2rem;
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid var(--primary);
+    border-radius: 50%;
+    color: var(--primary);
+    font-size: 1.5rem;
     cursor: pointer;
-    line-height: 0.5;
-    padding: 0.5rem;
+    line-height: 1;
+    padding: 0.25rem;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
 }
 
 .close-btn:hover {
+    background: var(--primary);
     color: white;
+    transform: scale(1.05);
 }
 
 .dish-description {

@@ -236,6 +236,13 @@ modal.addEventListener('click', (e) => {
     }
 });
 
+// Close modal on ESC key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+        modal.classList.add('hidden');
+    }
+});
+
 // Helpers
 function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
