@@ -10,7 +10,6 @@ let currentUser = null;
 const weekDateEl = document.getElementById('weekDate');
 const dishGridEl = document.getElementById('dishGrid');
 const daysNavEl = document.getElementById('daysNav');
-const searchInput = document.getElementById('dishSearch');
 const modal = document.getElementById('dishModal');
 const closeModalBtn = document.getElementById('closeModal');
 
@@ -211,53 +210,6 @@ function processMenuData(menu) {
             }
         });
     });
-}
-
-// Search Handler
-searchInput.addEventListener('input', (e) => {
-    const term = e.target.value.toLowerCase();
-
-    if (term === '') {
-        // Restore tab view when search is cleared
-        daysNavEl.style.display = 'flex';
-        renderMenuForDay(currentDay);
-        return;
-    }
-
-    // Hide tabs when searching
-    daysNavEl.style.display = 'none';
-
-    const filtered = allDishes.filter(dish => {
-        return (
-            dish.name.toLowerCase().includes(term) ||
-            dish.description.toLowerCase().includes(term)
-        );
-    });
-
-    renderDishesFlat(filtered);
-});
-
-// Helper to render a flat list of dishes (used for search results)
-function renderDishesFlat(dishes) {
-    if (dishes.length === 0) {
-        dishGridEl.innerHTML = '<div class="empty-msg">No dishes found matching your search.</div>';
-        return;
-    }
-
-    dishGridEl.innerHTML = `
-        <div class="dish-grid">
-            ${dishes.map(dish => `
-                <div class="dish-card" onclick="openDishModal('${dish.day}', '${dish.type}')">
-                    <div class="dish-header">
-                        <span class="dish-day">${capitalize(dish.day)}</span>
-                        <span class="dish-type">${capitalize(dish.type)}</span>
-                    </div>
-                    <h3>${dish.name}</h3>
-                    <p>${dish.description}</p>
-                </div>
-            `).join('')}
-        </div>
-    `;
 }
 
 // Modal Logic
